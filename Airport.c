@@ -1,27 +1,25 @@
 // Compile by using ./filename <configPath>
 #include "Airport.h"
 
-int time_unit, timer;
-int takeoff_time,takeoff_delta,landing_time,landing_delta, min_hold, max_hold;
-int max_takeoffs, max_landings;
-int shmid;
-shared_mem* airport;
-int fd;
-int mq_id;
-p_node head;
-int ids; //Our very own thread unique identifier
+int time_unit, takeoff_time,takeoff_delta,landing_time,landing_delta, min_hold, max_hold, max_takeoffs, max_landings;// Global Variables relative to config
+int shmid, fd, mq_id, ids;// shared memory id , pipe id, messaqe queue id, thread id
+shared_mem* airport; // Shared memory variable
+p_node head; // head of the linked list
 
 pthread_cond_t time_var = PTHREAD_COND_INITIALIZER;
-pthread_mutex_t mutex_time = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t mutex_write = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mutex_time = PTHREAD_MUTEX_INITIALIZER, mutex_write = PTHREAD_MUTEX_INITIALIZER;
 
 int main(int argc, char **argv){
     simulation_manager(argv[1]);
 }
 
-void simulation_manager(char* config_path) {
-    //Handle signals
+void simulation_manager(char* config_path){
+    /* The simulation Manager will handle all creating and managing all other "sub-parts " of the program
+     * Parameters:
+     *      config_path - specifies the config path used for initial config
+     */
     pthread_t time_thread, pipe_reader, flight_creator;
+
     signal(SIGUSR1,showStats);
     signal(SIGINT, terminate);
 
