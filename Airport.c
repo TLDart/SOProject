@@ -1,6 +1,6 @@
 // Compile by using ./filename <configPath>
 #include "Airport.h"
-#include <string.h>
+
 int time_unit, timer;
 int takeoff_time,takeoff_delta,landing_time,landing_delta, min_hold, max_hold;
 int max_takeoffs, max_landings;
@@ -8,8 +8,12 @@ int shmid;
 shared_mem* airport;
 int fd;
 int mq_id;
+p_node head;
+int ids; //Our very own thread unique identifier
 
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t time_var = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t mutex_time = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mutex_write = PTHREAD_MUTEX_INITIALIZER;
 
 int main(int argc, char **argv){
     simulation_manager(argv[1]);
@@ -17,16 +21,23 @@ int main(int argc, char **argv){
 
 void simulation_manager(char* config_path) {
     //Handle signals
-    pthread_t time_thread, pipe_reader;
+    pthread_t time_thread, pipe_reader, flight_creator;
     signal(SIGUSR1,showStats);
     signal(SIGINT, terminate);
+
+    clean_log();
+
+    write_to_log("PROGRAMS STARTS");
+
     //Load initial config
     if(load_config(config_path) < 0){
         //Loads initial simulation config
         perror("Could not load config, exiting");
 	exit(-1);
     }
-    printf("%d",getpid());
+    //printf("%d",getpid());
+
+    head = create_list();
     //Create Shared Memory Volume
     shmid = shmget(IPC_PRIVATE, sizeof(shared_mem),IPC_CREAT|0777);
     if (shmid < 0){
@@ -41,24 +52,27 @@ void simulation_manager(char* config_path) {
 	exit(-1);
   }
 
-
    //Create Control Tower
         if(fork() == 0){
         control_tower(); 
         exit(0);
 	}
 
-    //Create time thread
-	pthread_create(&time_thread, NULL,time_counter,airport); 
+    //Create named pipe
+    unlink(PIPE_NAME);
+    mkfifo(PIPE_NAME,O_CREAT|O_EXCL|0666);
+    if ((fd = open(PIPE_NAME, O_RDWR)) < 0) perror("Pipe Error");
 
-    //Create named pipe and thread
-        unlink(PIPE_NAME);
-        mkfifo(PIPE_NAME,O_CREAT|O_EXCL|0666);
-        fd = open(PIPE_NAME, O_RDONLY|O_NONBLOCK);
-	pthread_create(&pipe_reader, NULL,get_message_from_pipe,&fd); 
-	
-	pthread_join(time_thread, NULL);
-	pthread_join(pipe_reader,NULL);
+    //Create Flight_Creator_Thread
+    pthread_create(&flight_creator,NULL, create_flights, head);
+
+    //Create Time_Thread
+	pthread_create(&time_thread, NULL,time_counter,airport);
+
+	//Create Pipe_reader Thread
+	pthread_create(&pipe_reader, NULL,get_message_from_pipe,&fd);
+
+	while(1){};
 
 }
 
@@ -129,56 +143,144 @@ void showStats(int signum){
 
 void* get_message_from_pipe(void* arg){
 	//Reads a message from pipe into de buffer;
+	puts("PIPE HANDLER THREAD CREATED");
 	int fd = *((int*)arg);
 	char buffer[BUFFER_SIZE];
 	fd_set read_set;
 	int nread;
+	p_node parsed_data;
 
 	FD_ZERO(&read_set);
 	FD_SET(fd,&read_set);
 	while(1){
 		if(select(fd + 1, &read_set, NULL,NULL,NULL) > 0){
 			if (FD_ISSET(fd, &read_set)){
-                                nread = read(fd,buffer, BUFFER_SIZE);
-                                if (nread > 0){
-                                        buffer[nread] = '\0';
-                                        printf("%s", buffer); 
-					//Do the parsing functionm
-
-				}
+                    nread = read(fd,buffer, BUFFER_SIZE);
+                    if (nread > 0){
+                            buffer[nread] = '\0';
+                            if(buffer[nread - 1]  == '\n')
+                                buffer[nread -1] = '\0';
+                            //printf("%s", buffer);
+                            //Do the parsing function
+                            parsed_data = parsing(buffer);
+                            if(parsed_data != NULL){
+                                print_node(parsed_data);
+                                if(head == NULL) puts("NULLHEAD");
+                                add_flight(parsed_data, head);
+                                //print_list(head);
+                            }
+                    }
 			}
 		}
 	}
 }
 
 void terminate(int signum){
-	//Terminates the program,TODO:  NEEDS TO CLEAN RESOURCES
-	exit(0);	
-}
-
-void write_to_log(char * msg){
-	//Writes msg to lopg
-	FILE * fp;
-	time_t ctime;
-	struct tm *parsed_time;
-
-	//Handle time
-	time(&ctime);
-	parsed_time = localtime(&ctime);
-	fp = fopen ("log.txt","a");
-	fprintf(fp, "%d:%d:%d %s\n",parsed_time->tm_hour, parsed_time->tm_min, parsed_time->tm_sec, msg);	
+	//Terminates the program,TODO: NEEDS TO CLEAN RESOURCES
+	puts("[PROGRAM ENDING]");
+    write_to_log("PROGRAM ENDING");
+	exit(0);
 }
 
 void* time_counter(void* arg){
-	shared_mem *airport = (shared_mem*)arg;
+    puts("TIME-COUNTER THREAD CREATED");
 	while(1){
-		pthread_mutex_lock(&mutex);
+		pthread_mutex_lock(&mutex_time);
 		airport->time++;
-		//printf("%d TIME UNIT: %f\n", airport->time,time_unit*1000);
-		pthread_mutex_unlock(&mutex);
+		//printf("[TIME] :%d\n", airport->time);
+		pthread_mutex_unlock(&mutex_time);
+		pthread_cond_broadcast(&time_var);
 		usleep(time_unit*1000);
 		}
 	}
 void control_tower(){
-		
+    puts("CONTROL TOWER CREATED");
+    // Insert Control Tower Code
+
 }
+void* create_flights(void* pointer){
+    puts("FLIGHT CREATOR THREAD CRATED");
+    //p_node nodo = (p_node) pointer; //typecast para p_node
+    p_node list = head;
+    p_node flight;
+
+    pthread_t thread;//para colocar no pthread_create
+    struct args_threads *args;//pointer para uma struct que vai ser passado aos voos com os seus respetivos argumentos
+
+
+    while(1){
+
+        flight = list -> next;
+        //Parte que vai verificar se o tempo para tratar do voo ja chegou (uso de uma variavel de condicao e um mutex)
+        pthread_mutex_lock(&mutex_time);
+        while(flight == NULL || flight -> init > airport -> time){
+            pthread_cond_wait(&time_var, &mutex_time);
+            flight = list -> next;
+        }
+        pthread_mutex_unlock(&mutex_time);
+        //#############
+        args = (struct args_threads *) malloc(sizeof(struct args_threads)); //dar free deste pointer dentro da funcao departure ou arrival
+        args -> id = ids;
+        args -> nodo = flight;//depois tenho de dar free deste pointer
+
+        //funcao para iniciar a thread
+        if(strcmp(flight -> mode, "DEPARTURE") == 0){
+            pthread_create(&thread, NULL, departure, args);
+        }
+
+        else if(strcmp(flight -> mode, "ARRIVAL") == 0){
+            pthread_create(&thread, NULL, arrival, args);
+        }
+
+        else{
+            //da erro e escreve no log talvez
+        }
+
+        ids++; //incrementa a variavel que da os ids para as threads, assim garantimos que e sempre diferente
+
+        list -> next = list -> next -> next; //Passa a frente o voo que acabou de ser tratado
+    }
+    /*
+    Fazer alguma coisa para dar handle desta thread uma vez que ja nao seja necessaria
+    */
+}
+
+void* departure(void * arg){
+    srand(time(NULL));
+    struct args_threads* data = (struct args_threads*) arg;
+    char temp[250];
+    pthread_mutex_lock(&mutex_time);
+    sprintf(temp,"[DEPARTURE THREAD CREATED] [FLIGHT CODE] : %s [TAKEOFF]: %d", data->nodo->flight_code, data->nodo->takeoff);
+    printf("%s\n",temp);
+    write_to_log(temp);
+    pthread_mutex_unlock(&mutex_time);
+    //Post Thread Activity
+    sleep(rand()%3);
+    sprintf(temp,"[THREAD DELETED] [FLIGHT CODE] %s", data->nodo->flight_code);
+    printf("%s\n",temp);
+    write_to_log(temp);
+    // DO we need to free??
+    return NULL;
+}
+void* arrival(void* arg){
+    srand(time(NULL));
+    struct args_threads* data = (struct args_threads*) arg;
+    char temp[250];
+    pthread_mutex_lock(&mutex_time);
+    sprintf(temp,"[ARRIVAL THREAD CREATED] [FLIGHT CODE] : %s [ETA]: %d [FUEL]: %d", data->nodo->flight_code, data->nodo->eta, data->nodo->fuel);
+    printf("%s\n",temp);
+    write_to_log(temp);
+    pthread_mutex_unlock(&mutex_time);
+    //Post Thread Activity
+    sleep(rand()%3);
+    sprintf(temp,"[THREAD DELETED] [FLIGHT CODE] : %s",data->nodo->flight_code);
+    printf("%s\n",temp);
+    write_to_log(temp);
+    return NULL;
+}
+
+void clean_log(){
+    FILE* fp = fopen("log.txt", "w");
+    fclose(fp);
+}
+

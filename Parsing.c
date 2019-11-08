@@ -1,32 +1,7 @@
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
+#include "Parsing.h"
 
-#define SIZE 200
-
-typedef struct node *p_node;
-
-struct node{
-    char *mode;
-    char *flight_code;
-    int init;
-    int takeoff;
-    int fuel;
-    p_node next;
-};
-
-
-typedef struct{
-    long msgtype;
-    p_node info;
-}message;
-
-
-void erro(char *string){
-    //perror(string);
-    printf("%s\n", string);
-    //exit(-1);
-}
+extern pthread_mutex_t mutex_write, mutex_time;
+extern shared_mem* airport;
 
 int n_palavras(char *string){
     char *token, *temp;
@@ -46,12 +21,18 @@ int n_palavras(char *string){
 
 
 p_node parsing(char *string){
-    char *temp, *token, *aux;
+  //Parses the {STRING} and returns a p_node structure or NULL;
+    char *temp, *token, *aux, msgwrong[128],msgright[128], msgtimeout[128];
     char del [2] = " ";
     int i = 0;
     int e,j, numero_palavras;
     char **vector = (char **) malloc(sizeof(char *) * 8);
     int flag = 0; //flag para verificar se o comando e aceite
+
+    sprintf(msgwrong,"WRONG COMMAND [PARSING ERROR] => %s", string);
+    sprintf(msgright,"NEW COMMAND => %s", string);
+    sprintf(msgtimeout,"WRONG COMMAND [TIME IS GREATER THAN INIT] => %s", string);
+
 
     p_node nodo = (p_node) malloc(sizeof(struct node));//nodo que vai ser retornado caso o comando seja aceite
 
@@ -121,10 +102,12 @@ p_node parsing(char *string){
                 nodo->flight_code = vector[1];
                 nodo->init = atoi(vector[3]);
                 nodo->takeoff = atoi(vector[5]);
+                nodo->eta = -1;
                 nodo->fuel = -1;
                 nodo->next = NULL;
             } else {
-                erro("O comando que introduziu nao satisfaz a estrutura dos comandos.\n");
+                printf("WRONG COMMAND => %s\n", string );
+                write_to_log(msgwrong);
                 return NULL;
             }
             free(vector);
@@ -171,40 +154,69 @@ p_node parsing(char *string){
                 nodo->mode = vector[0];
                 nodo->flight_code = vector[1];
                 nodo->init = atoi(vector[3]);
-                nodo->takeoff = atoi(vector[5]);
+                nodo->takeoff = -1;
+                nodo->eta = atoi(vector[5]);
                 nodo->fuel = atoi(vector[7]);
                 nodo->next = NULL;
             } else {
-                erro("O comando que introduziu nao satisfaz a estrutura dos comandos.\n");
+                printf("WRONG COMMAND =>%s\n", string );
+                write_to_log(msgwrong);
                 return NULL;
             }
             free(vector);
         } else {
             free(nodo);
             free(vector);
-            erro("O comando que introduziu nao satisfaz a estrutura dos comandos.\n");
+            printf("WRONG COMMAND => %s\n", string );
+            write_to_log(msgwrong);
             return NULL;
         }
+        pthread_mutex_lock(&mutex_time);
+        if(nodo->init < airport->time){
+            pthread_mutex_unlock(&mutex_time);
+            printf("WRONG COMMAND [TIME IS GREATER THAN INIT] => %s\n", string );
+            write_to_log(msgtimeout);
+            return NULL;
+        }
+        pthread_mutex_unlock(&mutex_time);
+        printf("NEW COMMAND => %s\n", string );
+        write_to_log(msgright);
         return nodo;
     }
     else{
         free(vector);
         free(nodo);
-        erro("O comando que introduziu nao satisfaz a estrutura dos comandos.\n");
+        printf("WRONG COMMAND => %s\n", string );
+        write_to_log(msgwrong);
         return NULL;
     }
 }
 
+void write_to_log(char * msg){
+    //Writes msg to log
+    FILE * fp;
+    time_t ctime;
+    struct tm *parsed_time;
+
+    //Handle time
+    time(&ctime);
+    parsed_time = localtime(&ctime);
+    pthread_mutex_lock(&mutex_write);
+    fp = fopen ("log.txt","a");
+    fprintf(fp, "%2d:%2d:%2d %s\n",parsed_time->tm_hour, parsed_time->tm_min, parsed_time->tm_sec, msg);
+    fclose(fp);
+    pthread_mutex_unlock(&mutex_write);
+}
 
 
 
-
+/*
 int main(){
     p_node nodo = parsing("DEPARTURE TP440 init: 0 takeoff: 100");
     printf("%s, %s, %d, %d, %d\n", nodo -> mode, nodo -> flight_code, nodo -> init, nodo -> takeoff, nodo -> fuel);
     nodo = parsing("ARRIVAL TP437 init: 0 eta: 100 fuel: 1000");
-    printf("%s, %s, %d, %d, %d\n", nodo -> mode, nodo -> flight_code, nodo -> init, nodo -> takeoff, nodo -> fuel);
+    printf("%s, %s, %d, %d, %d\n", nodo -> mode, nodo -> flight_code, nodo -> init, nodo -> eta, nodo -> fuel);
     nodo = parsing("DEPARTURE TP440 init: 10 takeoff: 100");
     printf("%s, %s, %d, %d, %d\n", nodo -> mode, nodo -> flight_code, nodo -> init, nodo -> takeoff, nodo -> fuel);
     return 0;
-}
+}*/
