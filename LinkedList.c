@@ -1,5 +1,5 @@
 
-#include "Linked_list.h"
+#include "LinkedList.h"
 
 p_node create_list() {
     /* Creates a linked list with header

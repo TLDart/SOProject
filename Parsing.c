@@ -34,7 +34,7 @@ p_node parsing(char *string){
     sprintf(msgtimeout,"WRONG COMMAND [TIME IS GREATER THAN INIT] => %s", string);
 
 
-    p_node nodo = (p_node) malloc(sizeof(struct node));//nodo que vai ser retornado caso o comando seja aceite
+    p_node nodo = (p_node) malloc(sizeof(struct node));//node que vai ser retornado caso o comando seja aceite
 
     temp = (char *) malloc(sizeof(char) * strlen(string) + 1); //ver se preciso de alocar para o '\0'
     strcpy(temp, string);
@@ -192,31 +192,16 @@ p_node parsing(char *string){
     }
 }
 
-void write_to_log(char * msg){
-    //Writes msg to log
-    FILE * fp;
-    time_t ctime;
-    struct tm *parsed_time;
-
-    //Handle time
-    time(&ctime);
-    parsed_time = localtime(&ctime);
-    pthread_mutex_lock(&mutex_write);
-    fp = fopen ("log.txt","a");
-    fprintf(fp, "%2d:%2d:%2d %s\n",parsed_time->tm_hour, parsed_time->tm_min, parsed_time->tm_sec, msg);
-    fclose(fp);
-    pthread_mutex_unlock(&mutex_write);
-}
 
 
 
 /*
 int main(){
-    p_node nodo = parsing("DEPARTURE TP440 init: 0 takeoff: 100");
-    printf("%s, %s, %d, %d, %d\n", nodo -> mode, nodo -> flight_code, nodo -> init, nodo -> takeoff, nodo -> fuel);
-    nodo = parsing("ARRIVAL TP437 init: 0 eta: 100 fuel: 1000");
-    printf("%s, %s, %d, %d, %d\n", nodo -> mode, nodo -> flight_code, nodo -> init, nodo -> eta, nodo -> fuel);
-    nodo = parsing("DEPARTURE TP440 init: 10 takeoff: 100");
-    printf("%s, %s, %d, %d, %d\n", nodo -> mode, nodo -> flight_code, nodo -> init, nodo -> takeoff, nodo -> fuel);
+    p_node node = parsing("DEPARTURE TP440 init: 0 takeoff: 100");
+    printf("%s, %s, %d, %d, %d\n", node -> mode, node -> flight_code, node -> init, node -> takeoff, node -> fuel);
+    node = parsing("ARRIVAL TP437 init: 0 eta: 100 fuel: 1000");
+    printf("%s, %s, %d, %d, %d\n", node -> mode, node -> flight_code, node -> init, node -> eta, node -> fuel);
+    node = parsing("DEPARTURE TP440 init: 10 takeoff: 100");
+    printf("%s, %s, %d, %d, %d\n", node -> mode, node -> flight_code, node -> init, node -> takeoff, node -> fuel);
     return 0;
 }*/

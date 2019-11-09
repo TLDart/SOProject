@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include "Linked_list.h"
+#include "LinkedList.h"
 #include <time.h>
 #include <pthread.h>
 #define SIZE 200
@@ -24,9 +24,6 @@ typedef struct{
     // Takeoff tracks
 
 }shared_mem;
-
-
-
 
 int n_palavras(char *string);
 p_node parsing(char *string);
