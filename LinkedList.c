@@ -2,7 +2,11 @@
 #include "Linked_list.h"
 
 p_node create_list() {
-    //cria uma lista com header de nodos do tipo node
+    /* Creates a linked list with header
+     *
+     * Returns:
+     *      Return an element of type p_node with default elements and NULL values, this will be the head
+     */
     p_node list = (p_node) malloc(sizeof(struct node));
     list->mode = NULL;
     list->flight_code = NULL;
@@ -15,9 +19,9 @@ p_node create_list() {
     return list;
 }
 
-void add_flight(p_node node, p_node list) { //passa-se um nodo da struct node como argumento
+void add_flight(p_node node, p_node list) { //passa-se um node da struct node como argumento
 
-    //adiciona um nodo do tipo node a uma lista do tipo node previamente criada, ordena a lista por ordem descrescente de init
+    //adiciona um node do tipo node a uma lista do tipo node previamente criada, ordena a lista por ordem descrescente de init
 
     p_node temp = list;
     p_node ant, actual;
@@ -37,7 +41,7 @@ void add_flight(p_node node, p_node list) { //passa-se um nodo da struct node co
 
 
 p_node pop_flight(p_node list) {
-//Remove o primeiro nodo da lista e retorna o endereco desse nodo
+//Remove o primeiro node da lista e retorna o endereco desse node
 
     p_node res = NULL;
     if (list->next != NULL) {
