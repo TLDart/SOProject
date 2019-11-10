@@ -11,13 +11,30 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <sys/msg.h>
 #include "Parsing.h"
 
 #define BUFFER_SIZE 250
+#define MSGTYPE_DEFAULT 2
+#define MSGTYPE_PRIORITY 1
+
+struct message{
+    long msgtype;
+    int mode; //1 - ARRIVAL, 0 - DEPARTURE
+    int fuel;
+    int time_to_track;//IF MODE 1 THEN ETA, IF MODE 0 THEN TAKEOFF
+    int id;//ID that the control tower will use to message
+};
+
 
 struct args_threads{
     int id;
     p_node node;
+};
+
+struct sharedmem_info{//Struct used to send the position of the shared memory from the control tower to the flight
+    long msgtype;
+    int position;
 };
 
 void *time_counter(void *arg);

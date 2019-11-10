@@ -1,8 +1,9 @@
+
 #include "Thread.h"
 extern p_node head;
-extern pthread_mutex_t mutex_time;
-extern pthread_cond_t time_var;
-extern int ids, time_unit;
+extern pthread_mutex_t mutex_time, mutex_command;
+extern pthread_cond_t time_var, command_var;
+extern int ids, time_unit, mq_id, takeoff_time, landing_time;
 extern shared_mem* airport;
 
 void *time_counter(void *arg) {
@@ -65,7 +66,7 @@ void *create_flights(void *pointer) {
      * Parameters:
      *      pointer - Pointer to struct of type p_node which is the head of the list
      */
-    puts("FLIGHT CREATOR THREAD CRATED");
+    puts("FLIGHT CREATOR THREAD CREATED");
     p_node list = head, flight;
 
     pthread_t thread; //New thread to be Created
@@ -111,23 +112,64 @@ void *departure(void *arg) {
      *
      *
      */
-
-    srand(time(NULL)); //Temporary
     struct args_threads *data = (struct args_threads *) arg;
-    char temp[250];
-    pthread_mutex_lock(&mutex_time);
-    sprintf(temp, "[DEPARTURE THREAD CREATED] [FLIGHT CODE] : %s [TAKEOFF]: %d", data->node->flight_code,
+    char *aux = malloc(sizeof(char) * BUFFER_SIZE);
+    struct sharedmem_info temp;//Holds the message returned by the control tower
+    int position;
+
+    //Arrival Activity
+    sprintf(aux, "[DEPARTURE THREAD CREATED] [FLIGHT CODE] : %s [TAKEOFF]: %d", data->node->flight_code,
             data->node->takeoff);
-    printf("%s\n", temp);
-    write_to_log(temp);
-    pthread_mutex_unlock(&mutex_time);
+    printf("%s\n", aux);
+    write_to_log(aux);
+    free(aux);
+    //Initial Tower Messaging
+    /*
+    struct message *msg = malloc(sizeof(struct message));
+    msg -> msgtype = MSGTYPE_DEFAULT;
+    msg -> mode = 0;
+    msg -> fuel = -1;//Departing planes have no fuel
+    msg -> time_to_track = data -> node -> takeoff;
+    msg -> id = data -> id;
+
+    if(msgsnd(mq_id, &msg, sizeof(msg) - sizeof(long), 0) == -1){
+        perror("SENDING MESSAGE ERROR");
+        exit(-1);
+    }
+
+    if(msgrcv(mq_id, &temp, sizeof(temp) - sizeof(long), data -> id, 0) == -1){ //PARA QUE ISTO FUNCIONE A CONTROL TOWER TEM DE MANDAR A MENSAGEM COM MSGTYPE IGUAL AO ID QUE LHE FOI PASSADO NA MENSAGEM PARA ESTA ENVIADA
+        perror ("RECEIVING MESSAGE ERROR");
+        exit(-1);
+    }
+
+    position = temp.position;
+
     //Post Thread Activity
-    sleep(rand() % 3); //Temporary
-    sprintf(temp, "[THREAD DELETED] [FLIGHT CODE] %s", data->node->flight_code);
-    printf("%s\n", temp);
-    write_to_log(temp);
-    //TODO: Free Memory?
-    return NULL;
+
+    pthread_mutex_lock(&mutex_command);
+    while(){//colocar a condicao uma vez a shared memory criada com as posicoes para os comandos
+        pthread_cond_wait(&command_var, &mutex_command);
+    }
+    pthread_mutex_unlock(&mutex_command);
+
+    aux = (char *) malloc(sizeof(char) * SIZE);
+    sprintf(aux, "%s DEPARTURE {pista em que o voo vai partir} started", data->node->flight_code); // TODO: Complete with departure track
+    write_to_log(aux);
+    free(aux);
+    sleep(takeoff_time); //external global var
+    aux = (char *) malloc(sizeof(char) * SIZE);
+    sprintf(aux, "%s DEPARTURE {colocar a pista} concluded",data->node->flight_code);// TODO:Complete with departure track
+    write_to_log(aux);
+    free(aux);
+    */
+    //Final Thread Activity
+    aux = (char *) malloc(sizeof(char) * SIZE);
+    sprintf(aux, "[THREAD DELETED] [FLIGHT CODE] %s", data->node->flight_code);
+    printf("%s\n", aux);
+    write_to_log(aux);
+    free(data->node);
+    free(data);
+    pthread_exit(NULL);
 }
 
 
@@ -137,20 +179,90 @@ void *arrival(void *arg) {
      * Parameters
      *      arg - Struct which holds a struct that contains flight info
      */
-    srand(time(NULL));//Temporary
     struct args_threads *data = (struct args_threads *) arg;
-    char temp[250];
-    pthread_mutex_lock(&mutex_time);
-    sprintf(temp, "[ARRIVAL THREAD CREATED] [FLIGHT CODE] : %s [ETA]: %d [FUEL]: %d", data->node->flight_code,
+    struct sharedmem_info temp; //Holds the message that the that the control tower sends to the thread with the position in shared memory
+    int position; //Defined shared memory position for the flight
+    char *aux = malloc(sizeof(char) * BUFFER_SIZE);;//Writing to log temporary variable
+    int emergency_condition = 4 + data -> node -> eta + landing_time;//Priority flight condition
+
+    // Initial Thread Behavior
+    sprintf(aux, "[ARRIVAL THREAD CREATED] [FLIGHT CODE] : %s [ETA]: %d [FUEL]: %d", data->node->flight_code,
             data->node->eta, data->node->fuel);
-    printf("%s\n", temp);
-    write_to_log(temp);
-    pthread_mutex_unlock(&mutex_time);
+    printf("%s\n", aux);
+    write_to_log(aux);
+    free(aux);
+
     //Post Thread Activity
-    sleep(rand() % 3);//Temporary
-    sprintf(temp, "[THREAD DELETED] [FLIGHT CODE] : %s", data->node->flight_code);
-    printf("%s\n", temp);
-    write_to_log(temp);
-    //TODO:Free Memory
-    return NULL;
+    /*
+    struct message *msg = malloc(sizeof(struct message));
+
+    if(data -> node -> fuel == emergency_condition){
+        msg -> msgtype = MSGTYPE_PRIORITY;
+    }
+    else{
+        msg -> msgtype = MSGTYPE_DEFAULT;
+    }
+    msg -> mode = 1;
+    msg -> fuel = data -> node -> fuel;
+    msg -> time_to_track = data -> node -> eta;
+    msg -> id = data -> id;
+
+    if(msgsnd(mq_id, &msg, sizeof(msg) - sizeof(long), 0) == -1){
+        perror("ERROR SENDING MESSAGE");
+        exit(-1);
+    }
+
+    if(msgrcv(mq_id, &temp, sizeof(temp) - sizeof(long), data -> id, 0) == -1){ //PARA QUE ISTO FUNCIONE A CONTROL TOWER TEM DE MANDAR A MENSAGEM COM MSGTYPE IGUAL AO ID QUE LHE FOI PASSADO NA MENSAGEM PARA ESTA ENVIADA
+        perror("ERROR RECEIVING MESSAGE");
+        exit(-1);
+    }
+
+    position = temp.position;
+
+    //Wait for command loop
+    pthread_mutex_lock(&mutex_command);
+    while(){//verifica se recebeu o comando para aterrar ou para ir para outro aeroporto, se receber sai
+        pthread_cond_wait(&command_var, &mutex_command);
+        if(){//se receber um holding escreve essa informacao no log
+            aux = (char *) malloc(sizeof(char) * SIZE);
+            sprintf(aux, "%s HOLDING %2.lf", data -> node -> flight_code, airport -> avg_man_holding);//TODO:RECHECK THIS
+            //write_to_log function "{fligth_code} HOLDING {tempo de holding}"
+            //A hora nao sei bem como fazer, usamos o tempo do pc? Ou temos um inicializador separado? O nosso timer nao serve para aquilo
+            //o fligth_code vai buscar-se usando info -> nodo -> fligth_code
+            //tempo de holding vai ser o airport -> avg_man_holding
+            write_to_log(aux);
+            free(aux);
+        }
+    }
+    pthread_mutex_unlock(&mutex_command);
+
+    //Command receiving behaviour
+    TODO:DECIDE COMMANDS AND WHAT THEY DO
+    if(){//se o voo for aceite para aterrar
+        aux = (char *) malloc(sizeof(char) * SIZE);
+        sprintf(aux, "%s LANDING {pista em que esta a aterrar} started", data -> node -> flight_code);//TODO:Track
+        write_to_log(aux);
+        free(aux);
+        sleep(landing_time);//Waits landing time
+        aux = (char *) malloc(sizeof(char) * SIZE);
+        sprintf(aux, "%s LANDING {pista em que esta a aterrar} concluded", data->node->flight_code);//TODO:Track
+        write_to_log(aux);
+        free(aux);
+    }
+    else if(){//se o comando recevido for para este ir para outro aeroporto
+        aux = (char *) malloc(sizeof(char) * SIZE);
+        sprintf(aux, "%s LEAVING TO OTHER AIRPORT => FUEL = %d", data -> node -> flight_code, data -> node -> fuel);
+        write_to_log(aux);
+        free(aux);
+    }*/
+
+
+    //Deleting Thread and freeing memory
+    aux = malloc(sizeof(char) * BUFFER_SIZE);
+    sprintf(aux, "[THREAD DELETED] [FLIGHT CODE] : %s", data->node->flight_code);
+    printf("%s\n", aux);
+    write_to_log(aux);
+    free(data -> node);
+    free(data);
+    pthread_exit(NULL);
 }

@@ -19,11 +19,14 @@ p_node create_list() {
     return list;
 }
 
-void add_flight(p_node node, p_node list) { //passa-se um node da struct node como argumento
-
-    //adiciona um node do tipo node a uma lista do tipo node previamente criada, ordena a lista por ordem descrescente de init
-
-    p_node temp = list;
+void add_flight(p_node node, p_node head) {
+    /* A p_node type element to the list according to init time,meaning that the lowest element will have position 2 (position 1 is the head of the list
+     *
+     * Parameters:
+     *      node - p_node type element that we want to add to our list
+     *      head - specifies the head of a p_node type list
+     */
+    p_node temp = head;
     p_node ant, actual;
 
     ant = temp;
@@ -40,18 +43,30 @@ void add_flight(p_node node, p_node list) { //passa-se um node da struct node co
 }
 
 
-p_node pop_flight(p_node list) {
-//Remove o primeiro node da lista e retorna o endereco desse node
-
+p_node pop_flight(p_node head) {
+    /*Removes the first element of the list and returns it (without freeing)
+     *
+     * Parameters:
+     *      head - head of the p_node function
+     *
+     * Returns:
+     *      Return the element just removed
+     */
     p_node res = NULL;
-    if (list->next != NULL) {
-        res = list->next;
-        list->next = list->next->next;
+    if (head->next != NULL) {
+        res = head->next;
+        head->next = head->next->next;
     }
     return res;
 }
 
 void print_list(p_node head) {
+    /* Loops through every element and print a string of information containg the mode and init
+     * Parameters:
+     *      head - Head of the p_node list;
+     *
+     *
+     */
     p_node temp = head -> next;
     while (temp != NULL) {
         //print_node(head->next);
@@ -61,6 +76,12 @@ void print_list(p_node head) {
 }
 
 void print_node(p_node node) {
+    /* Prints a single p_node element info
+     *
+     * Parameters:
+     *      node - node element of type p_node to be printed;
+     */
+
     puts("----------------------------------");
     printf("[MODE] : %s\n"
            "[FLIGHT CODE] : %s\n"

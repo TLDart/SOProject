@@ -4,6 +4,14 @@ extern pthread_mutex_t mutex_write, mutex_time;
 extern shared_mem* airport;
 
 int n_palavras(char *string){
+    /* Counts the number of words in a string
+     *
+     * Parameters:
+     *      string - char* type to be counted;
+     *
+     * Returns:
+     *      Returns the number of words in a string
+     */
     char *token, *temp;
     char del[2] = " ";
     int res = 0;
@@ -21,7 +29,15 @@ int n_palavras(char *string){
 
 
 p_node parsing(char *string){
-  //Parses the {STRING} and returns a p_node structure or NULL;
+    /* transforms the given string into a p_node type element
+     *
+     * Parameters:
+     *      string - char* type that will serve as the message to be parsed
+     *
+     * Returns:
+     *    p_node type element if string is valid, according to the function
+     *    NULL in case of invalid parsing
+     */
     char *temp, *token, *aux, msgwrong[128],msgright[128], msgtimeout[128];
     char del [2] = " ";
     int i = 0;
@@ -33,26 +49,23 @@ p_node parsing(char *string){
     sprintf(msgright,"NEW COMMAND => %s", string);
     sprintf(msgtimeout,"WRONG COMMAND [TIME IS GREATER THAN INIT] => %s", string);
 
+    p_node nodo = (p_node) malloc(sizeof(struct node));//Node that will be return if the command gets accepted
 
-    p_node nodo = (p_node) malloc(sizeof(struct node));//node que vai ser retornado caso o comando seja aceite
-
-    temp = (char *) malloc(sizeof(char) * strlen(string) + 1); //ver se preciso de alocar para o '\0'
+    temp = (char *) malloc(sizeof(char) * strlen(string) + 1);
     strcpy(temp, string);
 
-    //colocar aqui a funcao para contar as palavras e depois voltar a colocar a a string no temp
     numero_palavras = n_palavras(temp);
     if(numero_palavras == 6 || numero_palavras == 8) {
 
-
-        //copia o mode para a primeira posicao do array de strings e aloca a memoria para essa string dinamicamente
+        //Copies mode to the first position of the array e allocates memory dynamically
         token = strtok(temp, del);
         aux = (char *) malloc(sizeof(char) * strlen(token) + 1);
         strcpy(aux, token);
         vector[0] = aux;
 
         if (strcmp(aux, "DEPARTURE") == 0) {
-            //codigo para a DEPARTURE
-            //aloca memoria dinamicamente para cada token e coloca essa string no local correto do array de strings
+            //Behaviour for departure
+            //Allocates memory dinamically for each token and puts that string correctly in the array of strings.
             for (i = 1; token != NULL; i++) {
                 token = strtok(NULL, del);
                 if (token != NULL) {
@@ -61,7 +74,7 @@ p_node parsing(char *string){
                     vector[i] = aux;
                 }
             }
-            //coloca na variavel aux a string de controlo devolvida por
+
             aux = (char *) malloc(sizeof(char) * SIZE);
             sprintf(aux, "DEPARTURE %s init: %s takeoff: %s", vector[1], vector[3], vector[5]);
             //printf("%s\n", aux);
@@ -70,7 +83,7 @@ p_node parsing(char *string){
                 flag = 1;
             }
 
-            //verifica o flight_code
+            //Verifies flight code
             temp = vector[1];
             if (temp[0] != 'T') {
                 flag = 1;
@@ -81,12 +94,11 @@ p_node parsing(char *string){
 
 
             for (e = 2; e < strlen(temp); e++) {
-                //printf("%c\n", temp[e]);
                 if ((temp[e]) > 57 || (temp[e]) < 48) {
                     flag = 1;
                 }
             }
-            //verifica o tempo inicial e o takeoff
+            //Verifies initial time and takeoff
             for (j = 3; j <= 5; j += 2) {
                 temp = vector[j];
                 for (e = 0; e < strlen(temp); e++) {
@@ -112,7 +124,7 @@ p_node parsing(char *string){
             }
             free(vector);
         } else if (strcmp(token, "ARRIVAL") == 0) {
-            //codgigo para a ARRIVAL
+            //Behavior for Arrival code
             for (i = 1; token != NULL; i++) {
                 token = strtok(NULL, del);
                 if (token != NULL) {
@@ -128,7 +140,7 @@ p_node parsing(char *string){
                 flag = 1;
             }
 
-            //verifica o flight_code
+            //Verifies Flight code
             temp = vector[1];
             if (temp[0] != 'T') {
                 flag = 1;
@@ -141,7 +153,7 @@ p_node parsing(char *string){
                     flag = 1;
                 }
             }
-            //verifica o tempo inicial e o takeoff
+            //Verifies initial time and takeoff
             for (j = 3; j <= 7; j += 2) {
                 temp = vector[j];
                 for (e = 0; e < strlen(temp); e++) {
@@ -191,11 +203,7 @@ p_node parsing(char *string){
         return NULL;
     }
 }
-
-
-
-
-/*
+/* DEBUG
 int main(){
     p_node node = parsing("DEPARTURE TP440 init: 0 takeoff: 100");
     printf("%s, %s, %d, %d, %d\n", node -> mode, node -> flight_code, node -> init, node -> takeoff, node -> fuel);

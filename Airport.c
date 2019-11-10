@@ -1,13 +1,15 @@
 // Compile by using ./filename <configPath>
 #include "Airport.h"
 //TODO: Review Parsing and LinkedList
+//TODO: Add A ReadME
 int time_unit, takeoff_time, takeoff_delta, landing_time, landing_delta, min_hold, max_hold, max_takeoffs, max_landings;// Global Variables relative to config
 int shmid, fd, mq_id, ids;// shared memory id , pipe id, messaqe queue id, thread id
 shared_mem *airport; // Shared memory variable
 p_node head; // head of the linked list
 
-pthread_cond_t time_var = PTHREAD_COND_INITIALIZER;
-pthread_mutex_t mutex_time = PTHREAD_MUTEX_INITIALIZER, mutex_write = PTHREAD_MUTEX_INITIALIZER, mutex_stats = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t time_var = PTHREAD_COND_INITIALIZER,command_var = PTHREAD_COND_INITIALIZER;;
+pthread_mutex_t mutex_time = PTHREAD_MUTEX_INITIALIZER, mutex_write = PTHREAD_MUTEX_INITIALIZER, mutex_stats = PTHREAD_MUTEX_INITIALIZER, mutex_command = PTHREAD_MUTEX_INITIALIZER;
+
 
 int main(int argc, char **argv) {
     simulation_manager(argv[1]);
@@ -32,7 +34,7 @@ void simulation_manager(char *config_path) {
     //Load initial config
     if (load_config(config_path) < 0) {
         perror("CONFIG LOAD ERROR\n");
-        exit(-1);
+        exit(0);
     }
 
     //Create Linked List
@@ -92,43 +94,46 @@ int load_config(char *path) {
     int counter = 0;
     FILE *fp;
 
-    if ((fp = fopen(path, "r")) == NULL) return -1;
+    if ((fp = fopen(path, "r")) == NULL){perror("CONFIG ERROR. ABORTING\n"); return -1;}
     char buffer[BUFFER_SIZE], *token;
     const char delimiter[2] = ",";
     while (fgets(buffer, BUFFER_SIZE, fp) != NULL) {
         buffer[strcspn(buffer, "\n")] = 0; //Removes the trailing ‘\n’
         if (counter == 0) {
-            if((time_unit = atoi(buffer)) == 0 && buffer[0] !='0'){
-                perror("CONFIG ERROR. ABORTING\n");
-                return -1;
-            }
+            if((time_unit = atoi(buffer)) == 0 && buffer[0] !='0'){ return -1;}
         }
         if (counter == 1) {
             token = strtok(buffer, delimiter);
-            takeoff_time = atoi(token);
+            config_test(token);
+            if((takeoff_time = atoi(token)== 0 && buffer[0] !='0')){ return -1;}
             token = strtok(NULL, delimiter);
-            takeoff_delta = atoi(token);
+            config_test(token);
+            if((takeoff_delta = atoi(token) == 0 && buffer[0] !='0')){ return -1;}
         }
         if (counter == 2) {
             token = strtok(buffer, delimiter);
-            landing_time = atoi(token);
+            config_test(token);
+            if((landing_time = atoi(token) == 0 && buffer[0] !='0')){return -1;}
             token = strtok(NULL, delimiter);
-            landing_delta = atoi(token);
+            config_test(token);
+            if((landing_delta = atoi(token) == 0 && buffer[0] !='0')){return -1;}
 
         }
         if (counter == 3) {
             token = strtok(buffer, delimiter);
-            min_hold = atoi(token);
+            config_test(token);
+            if((min_hold = atoi(token) == 0 && buffer[0] !='0')){ return -1;}
             token = strtok(NULL, delimiter);
-            max_hold = atoi(token);
+            config_test(token);
+            if((max_hold = atoi(token) == 0 && buffer[0] !='0')){ return -1;}
 
         }
         if (counter == 4) {
-            max_takeoffs = atoi(buffer);
+            if((max_takeoffs = atoi(buffer) == 0 && buffer[0] !='0')){ return -1;}
 
         }
         if (counter == 5) {
-            max_landings = atoi(buffer);
+            if((max_landings = atoi(buffer) == 0 && buffer[0] !='0')){ return -1;}
         }
         memset(buffer, 0, strlen(buffer));//Resets the buffer
         counter++;
@@ -166,19 +171,37 @@ void showStats(int signum) {
 
 
 
-void exit_program(int signum) {
-    //TODO: NEEDS TO CLEAN RESOURCES
-
+void exit_program(int signum){
     /* Terminates the current program freeing all the resource
      *
-     * Paramater
+     * Parameter
      *      signum - Number to the signal
-     *
-     *
-     *
      */
+    /*
+    wait(NULL);//fica à espera que a control tower acabe aquilo que tem a fazer
+    //Remove mutexes and condition variables
+    pthread_cond_destroy(&command_var);
+    pthread_cond_destroy(&time_var);
+    pthread_mutex_destroy(&mutex_time);
+    pthread_mutex_destroy(&mutex_command);
+    pthread_mutex_destroy(&mutex_stats);
+
+    //remover a message queue
+    msgctl(mq_id, IPC_RMID, NULL);
+
+    //remover a shared memory
+    shmdt(airport);
+    shmctl(shmid, IPC_RMID, NULL);
+
+    //Free flight list
+    free(head);
+
+    */
     puts("[PROGRAM ENDING]");
     write_to_log("PROGRAM ENDING");
+    //remover o mutex_write usado no write_to_log, para ficarem todos juntos, podem mudar-se todos os outros para depois desta instrução
+    pthread_mutex_destroy(&mutex_write);
+
     exit(0);
 }
 
@@ -211,4 +234,11 @@ void write_to_log(char * msg){
     fprintf(fp, "%2d:%2d:%2d %s\n",parsed_time->tm_hour, parsed_time->tm_min, parsed_time->tm_sec, msg);
     fclose(fp);
     pthread_mutex_unlock(&mutex_write);
+}
+
+void config_test(char* token){
+    if(token == NULL){
+        perror("CONFIG ERROR. ABORTING\n");
+        exit(-1);
+    }
 }
