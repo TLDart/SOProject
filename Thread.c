@@ -50,7 +50,7 @@ void *get_message_from_pipe(void *arg) {
                         buffer[nread - 1] = '\0';
                     parsed_data = parsing(buffer); // Handle the buffer
                     if (parsed_data != NULL) {
-                        print_node(parsed_data);
+                        //print_node(parsed_data);
                         if (head == NULL) puts("NULLHEAD"); // Verify if list lead exists
                         add_flight(parsed_data, head);
                     }
@@ -115,7 +115,7 @@ void *departure(void *arg) {
     struct args_threads *data = (struct args_threads *) arg;
     char *aux = malloc(sizeof(char) * BUFFER_SIZE);
     struct sharedmem_info temp;//Holds the message returned by the control tower
-    int position;
+    //int position;
 
     //Arrival Activity
     sprintf(aux, "[DEPARTURE THREAD CREATED] [FLIGHT CODE] : %s [TAKEOFF]: %d", data->node->flight_code,

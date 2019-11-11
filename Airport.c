@@ -76,7 +76,8 @@ void simulation_manager(char *config_path) {
     pthread_create(&pipe_reader, NULL, get_message_from_pipe, &fd);
 
     //TODO: Correct Undefined Behavior
-    while (1) {};
+    //while (1) {};
+    pthread_join(&time_thread, NULL);
 
 }
 
