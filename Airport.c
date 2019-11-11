@@ -77,7 +77,7 @@ void simulation_manager(char *config_path) {
 
     //TODO: Correct Undefined Behavior
     //while (1) {};
-    pthread_join(&time_thread, NULL);
+    pthread_join(time_thread, NULL);
 
 }
 
@@ -149,6 +149,7 @@ int load_config(char *path) {
 
 void showStats(int signum) {
     /* Prints Stats to the user
+     *
      *
      * Parameters:
      *      signum = signal number
