@@ -13,11 +13,8 @@ void *time_counter(void *arg) {
      */
     puts("TIME-COUNTER THREAD CREATED");
     while (1) {
-        pthread_mutex_lock(&mutex_time);
-        airport->time++;
-        pthread_mutex_unlock(&mutex_time);
-        pthread_cond_broadcast(&time_var);
-        usleep(time_unit * 1000); //Converting ms to us
+
+         //Converting ms to us
     }
 }
 
@@ -66,42 +63,47 @@ void *create_flights(void *pointer) {
      * Parameters:
      *      pointer - Pointer to struct of type p_node which is the head of the list
      */
-    puts("FLIGHT CREATOR THREAD CREATED");
+    puts("FLIGHT CREATOR  AND TIME-THREAD CREATED");
     p_node list = head, flight;
 
     pthread_t thread; //New thread to be Created
     struct args_threads *args;// Pointer to struct that holds flight information, this struct will be handed to the flight on creation
 
     while (1) {
-        flight = list->next;
-        //Verify, with mutual exclusion and condition variable, if it is time for the flight to be created
         pthread_mutex_lock(&mutex_time);
-        while (flight == NULL || flight->init > airport->time) {
-            pthread_cond_wait(&time_var, &mutex_time); // Changed by Timer Thread
+        airport->time++;
+        printf("[TIME] : %d\n", airport->time);
+        pthread_mutex_unlock(&mutex_time);
+        pthread_cond_broadcast(&time_var);
+
+        flight = list->next;
+        //printf(flight);
+        //Verify, with mutual exclusion and condition variable, if it is time for the flight to be created
+        while ( flight != NULL && flight->init <= airport->time) {
+            args = (struct args_threads *) malloc(sizeof(struct args_threads)); //Needs to be freed from within the departure/ arrival function;
+            args->id = ids;
+            args->node = flight;//TODO: This pointer needs to be freed
+            puts("here");
+            //Functions to create the thread TODO: Functions that actually manipulate the shared memory
+            if (strcmp(flight->mode, "DEPARTURE") == 0) {
+                pthread_create(&thread, NULL, departure, args);
+            } else if (strcmp(flight->mode, "ARRIVAL") == 0) {
+                pthread_create(&thread, NULL, arrival, args);
+            } else {
+                puts("[THREAD CREATION ERROR]");
+                write_to_log("[THREAD CREATION ERROR]");
+            }
+            ids++; //Increment Thread Unique ID
+            list->next = list->next->next; //Removes from list without destroying node
             flight = list->next;
         }
-        pthread_mutex_unlock(&mutex_time);
-
-        args = (struct args_threads *) malloc(sizeof(struct args_threads)); //Needs to be freed from within the departure/ arrival function;
-        args->id = ids;
-        args->node = flight;//TODO: This pointer needs to be freed
-
-        //Functions to create the thread TODO: Functions that actually manipulate the shared memory
-        if (strcmp(flight->mode, "DEPARTURE") == 0) {
-            pthread_create(&thread, NULL, departure, args);
-        } else if (strcmp(flight->mode, "ARRIVAL") == 0) {
-            pthread_create(&thread, NULL, arrival, args);
-        } else {
-            puts("[THREAD CREATION ERROR]");
-            write_to_log("[THREAD CREATION ERROR]");
+        usleep(time_unit * 1000);
         }
-        ids++; //Increment Thread Unique ID
-        list->next = list->next->next; //Removes from list without destroying node
+
     }
     /*
     TODO:Handle this thread after closure
     */
-}
 
 
 void *departure(void *arg) {
@@ -193,7 +195,7 @@ void *arrival(void *arg) {
     free(aux);
 
     //Post Thread Activity
-    /*
+    
     struct message *msg = malloc(sizeof(struct message));
 
     if(data -> node -> fuel == emergency_condition){
@@ -220,6 +222,7 @@ void *arrival(void *arg) {
     position = temp.position;
 
     //Wait for command loop
+    /*
     pthread_mutex_lock(&mutex_command);
     while(){//verifica se recebeu o comando para aterrar ou para ir para outro aeroporto, se receber sai
         pthread_cond_wait(&command_var, &mutex_command);
@@ -237,7 +240,7 @@ void *arrival(void *arg) {
     pthread_mutex_unlock(&mutex_command);
 
     //Command receiving behaviour
-    TODO:DECIDE COMMANDS AND WHAT THEY DO
+    //TODO:DECIDE COMMANDS AND WHAT THEY DO
     if(){//se o voo for aceite para aterrar
         aux = (char *) malloc(sizeof(char) * SIZE);
         sprintf(aux, "%s LANDING {pista em que esta a aterrar} started", data -> node -> flight_code);//TODO:Track

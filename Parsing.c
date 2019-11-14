@@ -27,7 +27,6 @@ int n_palavras(char *string){
     return res;
 }
 
-
 p_node parsing(char *string){
     /* transforms the given string into a p_node type element
      *

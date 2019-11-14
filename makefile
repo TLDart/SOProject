@@ -4,7 +4,7 @@ PROG = airport
 FLAGS = -Wall -O -g -pthread
 MATH = -lm
 
-################## GENERIC ################
+################## GENERIC #################
 
 all: ${PROG}
 
@@ -17,7 +17,7 @@ ${PROG}: ${OBJS}
 .c.o:
 	${CC} ${FLAGS} $< -c -o $@
 
-################ DEPENDECIES ##############
+################ DEPENDECIES ###############
 
 Airport.o: Airport.c Airport.h LinkedList.o Thread.o
 
@@ -26,5 +26,7 @@ LinkedList.o: LinkedList.c LinkedList.h
 Parsing.o: Parsing.c Parsing.h LinkedList.h
 
 Thread.o : Parsing.h Thread.c Thread.h
+
+ThreadCT.o: ThreadCT.h ThreadCT.c Thread.h
 
 

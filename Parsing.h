@@ -1,7 +1,3 @@
-//
-// Created by TLDart on 08/11/2019.
-//
-
 #ifndef PROJECTWORK_PARSING_H
 #define PROJECTWORK_PARSING_H
 
@@ -18,10 +14,9 @@
 typedef struct{
     int total_flights, total_landed, total_takeoff, redirected_flights, rejected_flights;
     double avg_ETA, avg_takeoff, avg_man_holding, avg_man_emergency;
-    int time ;
+    int time;
 
-    // Landing Tracks
-    // Takeoff tracks
+    int max_flights[1100];
 
 }shared_mem;
 

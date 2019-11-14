@@ -12,7 +12,12 @@ pthread_mutex_t mutex_time = PTHREAD_MUTEX_INITIALIZER, mutex_write = PTHREAD_MU
 
 
 int main(int argc, char **argv) {
-    simulation_manager(argv[1]);
+    if(argv[1] != NULL) {
+        simulation_manager(argv[1]);
+    }
+    else{
+        simulation_manager("config.txt");
+    }
 }
 
 void simulation_manager(char *config_path) {
@@ -77,7 +82,8 @@ void simulation_manager(char *config_path) {
 
     //TODO: Correct Undefined Behavior
     //while (1) {};
-    pthread_join(time_thread, NULL);
+   pthread_join(flight_creator, NULL);
+
 
 }
 

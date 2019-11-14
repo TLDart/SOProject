@@ -13,7 +13,7 @@
 #include <time.h>
 #include <pthread.h>
 
-#include "Thread.h"
+#include "ThreadCT.h"
 
 #define PIPE_NAME "Input_pipe"
 
