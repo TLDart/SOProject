@@ -72,18 +72,17 @@ void *create_flights(void *pointer) {
     while (1) {
         pthread_mutex_lock(&mutex_time);
         airport->time++;
-        printf("[TIME] : %d\n", airport->time);
+        //printf("[TIME] : %d\n", airport->time);
         pthread_mutex_unlock(&mutex_time);
         pthread_cond_broadcast(&time_var);
 
         flight = list->next;
         //printf(flight);
         //Verify, with mutual exclusion and condition variable, if it is time for the flight to be created
-        while ( flight != NULL && flight->init <= airport->time) {
+        while (flight != NULL && flight->init <= airport->time) {
             args = (struct args_threads *) malloc(sizeof(struct args_threads)); //Needs to be freed from within the departure/ arrival function;
             args->id = ids;
             args->node = flight;//TODO: This pointer needs to be freed
-            puts("here");
             //Functions to create the thread TODO: Functions that actually manipulate the shared memory
             if (strcmp(flight->mode, "DEPARTURE") == 0) {
                 pthread_create(&thread, NULL, departure, args);
@@ -116,8 +115,9 @@ void *departure(void *arg) {
      */
     struct args_threads *data = (struct args_threads *) arg;
     char *aux = malloc(sizeof(char) * BUFFER_SIZE);
-    struct sharedmem_info temp;//Holds the message returned by the control tower
-    //int position;
+    struct sharedmem_info *temp = malloc(sizeof(struct sharedmem_info));//Holds the message returned by the control tower
+    struct message *msg = malloc(sizeof(struct message));
+    int position;
 
     //Arrival Activity
     sprintf(aux, "[DEPARTURE THREAD CREATED] [FLIGHT CODE] : %s [TAKEOFF]: %d", data->node->flight_code,
@@ -126,28 +126,27 @@ void *departure(void *arg) {
     write_to_log(aux);
     free(aux);
     //Initial Tower Messaging
-    /*
-    struct message *msg = malloc(sizeof(struct message));
+
+
     msg -> msgtype = MSGTYPE_DEFAULT;
     msg -> mode = 0;
     msg -> fuel = -1;//Departing planes have no fuel
     msg -> time_to_track = data -> node -> takeoff;
     msg -> id = data -> id;
 
-    if(msgsnd(mq_id, &msg, sizeof(msg) - sizeof(long), 0) == -1){
+    printf("[THREAD][MSG SENT][ID] %d\n",msg->id);
+    if(msgsnd(mq_id, msg, sizeof(msg) - sizeof(long), 0) == -1){
         perror("SENDING MESSAGE ERROR");
         exit(-1);
     }
-
-    if(msgrcv(mq_id, &temp, sizeof(temp) - sizeof(long), data -> id, 0) == -1){ //PARA QUE ISTO FUNCIONE A CONTROL TOWER TEM DE MANDAR A MENSAGEM COM MSGTYPE IGUAL AO ID QUE LHE FOI PASSADO NA MENSAGEM PARA ESTA ENVIADA
+    if(msgrcv(mq_id, temp, sizeof(temp) - sizeof(long), data -> id, 0) == -1){ //PARA QUE ISTO FUNCIONE A CONTROL TOWER TEM DE MANDAR A MENSAGEM COM MSGTYPE IGUAL AO ID QUE LHE FOI PASSADO NA MENSAGEM PARA ESTA ENVIADA
         perror ("RECEIVING MESSAGE ERROR");
         exit(-1);
     }
-
-    position = temp.position;
-
+    position = temp->position;
+    printf("[THREAD][RECEIVED MSG SUCCESSFULLY] [MYID] %d [ID] %ld [POS] %d\n",msg->id,temp->msgtype,temp->position);
     //Post Thread Activity
-
+    /*
     pthread_mutex_lock(&mutex_command);
     while(){//colocar a condicao uma vez a shared memory criada com as posicoes para os comandos
         pthread_cond_wait(&command_var, &mutex_command);
@@ -190,7 +189,7 @@ void *arrival(void *arg) {
     // Initial Thread Behavior
     sprintf(aux, "[ARRIVAL THREAD CREATED] [FLIGHT CODE] : %s [ETA]: %d [FUEL]: %d", data->node->flight_code,
             data->node->eta, data->node->fuel);
-    printf("%s\n", aux);
+    puts(aux);
     write_to_log(aux);
     free(aux);
 
@@ -213,14 +212,14 @@ void *arrival(void *arg) {
         perror("ERROR SENDING MESSAGE");
         exit(-1);
     }
-
+    printf("[THREAD][MSG SENT] [ID] %d\n",msg->id);
     if(msgrcv(mq_id, &temp, sizeof(temp) - sizeof(long), data -> id, 0) == -1){ //PARA QUE ISTO FUNCIONE A CONTROL TOWER TEM DE MANDAR A MENSAGEM COM MSGTYPE IGUAL AO ID QUE LHE FOI PASSADO NA MENSAGEM PARA ESTA ENVIADA
         perror("ERROR RECEIVING MESSAGE");
         exit(-1);
     }
 
     position = temp.position;
-
+    printf("[THREAD][RECEIVED MSG SUCCESSFULLY] [ID] %d [POS] %d",msg->id,position);
     //Wait for command loop
     /*
     pthread_mutex_lock(&mutex_command);

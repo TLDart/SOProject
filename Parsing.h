@@ -16,7 +16,7 @@ typedef struct{
     double avg_ETA, avg_takeoff, avg_man_holding, avg_man_emergency;
     int time;
 
-    int max_flights[1100];
+    int *max_flights;
 
 }shared_mem;
 

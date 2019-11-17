@@ -3,7 +3,7 @@
 //TODO: Review Parsing and LinkedList
 //TODO: Add A ReadME
 int time_unit, takeoff_time, takeoff_delta, landing_time, landing_delta, min_hold, max_hold, max_takeoffs, max_landings;// Global Variables relative to config
-int shmid, fd, mq_id, ids;// shared memory id , pipe id, messaqe queue id, thread id
+int shmid, fd, mq_id, ids = 1, condition = 1;// shared memory id , pipe id, messaqe queue id, thread id
 shared_mem *airport; // Shared memory variable
 p_node head; // head of the linked list
 
@@ -41,18 +41,21 @@ void simulation_manager(char *config_path) {
         perror("CONFIG LOAD ERROR\n");
         exit(0);
     }
+    printf("MAIN MAX TAKEOFFS %d\n", (max_takeoffs));
+
 
     //Create Linked List
     head = create_list();
 
     //Create Shared Memory Volume
-    shmid = shmget(IPC_PRIVATE, sizeof(shared_mem), IPC_CREAT | 0777);
+    shmid = shmget(IPC_PRIVATE, sizeof(shared_mem) +(max_landings +max_takeoffs) * sizeof(int), IPC_CREAT | 0777);
     if (shmid < 0) {
         perror("Failed to Create shared memory block");
         exit(1);
     }
     airport = (shared_mem *) shmat(shmid, NULL, 0);
-
+    memset(airport->max_flights,0,(max_landings + max_takeoffs) * sizeof(int));
+    //if(airport->max_flights[837] == 0) puts("SUCCESS:))");
 
     //Create MSQ
     if ((mq_id = msgget(IPC_PRIVATE, IPC_CREAT | 0777)) == -1) {
@@ -136,11 +139,10 @@ int load_config(char *path) {
 
         }
         if (counter == 4) {
-            if((max_takeoffs = atoi(buffer) == 0 && buffer[0] !='0')){ return -1;}
-
+            if((max_takeoffs = atoi(buffer)) == 0 && buffer[0] !='0'){ return -1;}
         }
         if (counter == 5) {
-            if((max_landings = atoi(buffer) == 0 && buffer[0] !='0')){ return -1;}
+            if((max_landings = atoi(buffer) == 0) && buffer[0] !='0'){ return -1;}
         }
         memset(buffer, 0, strlen(buffer));//Resets the buffer
         counter++;
@@ -217,9 +219,11 @@ void control_tower() {
     /* Handles Flight Threads, shared memory communication, and Message Queue Messaging
      *
      */
+    pthread_t msg_reader;
     puts("CONTROL TOWER CREATED");
     // Insert Control Tower Code
-
+    pthread_create(&msg_reader, NULL, get_messages,NULL);
+    pthread_join(msg_reader, NULL);
 }
 
 void clean_log() {

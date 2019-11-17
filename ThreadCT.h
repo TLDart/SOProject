@@ -10,12 +10,19 @@
 
 extern pthread_mutex_t mutex_time;
 extern pthread_cond_t time_var;
-extern condition;
+extern int condition, mq_id, max_takeoffs, max_landings;
+extern shared_mem *airport;
 
 
 struct message_array{
     struct message* msg;
     struct message_array* next;
 };
+
+struct message_array* create_msg_array();
+void fuel_decrement(void* arg);
+void add_msg_array(struct message_array* node, struct message_array* head);
+void *get_messages(void *arg);
+int index_shm();
 
 
