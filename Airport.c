@@ -3,7 +3,7 @@
 //TODO: Review Parsing and LinkedList
 //TODO: Add A ReadME
 int time_unit, takeoff_time, takeoff_delta, landing_time, landing_delta, min_hold, max_hold, max_takeoffs, max_landings;// Global Variables relative to config
-int shmid, fd, mq_id, ids = 1, condition = 1;// shared memory id , pipe id, messaqe queue id, thread id
+int shmid, fd, mq_id, ids = 10, condition = 1;// shared memory id , pipe id, messaqe queue id, thread id
 shared_mem *airport; // Shared memory variable
 p_node head; // head of the linked list
 
@@ -41,7 +41,7 @@ void simulation_manager(char *config_path) {
         perror("CONFIG LOAD ERROR\n");
         exit(0);
     }
-    printf("MAIN MAX TAKEOFFS %d\n", (max_takeoffs));
+    printf("MAIN MAX TOTAL %d\n", (max_takeoffs + max_landings));
 
 
     //Create Linked List
@@ -142,7 +142,7 @@ int load_config(char *path) {
             if((max_takeoffs = atoi(buffer)) == 0 && buffer[0] !='0'){ return -1;}
         }
         if (counter == 5) {
-            if((max_landings = atoi(buffer) == 0) && buffer[0] !='0'){ return -1;}
+            if((max_landings = atoi(buffer)) == 0 && buffer[0] !='0'){ return -1;}
         }
         memset(buffer, 0, strlen(buffer));//Resets the buffer
         counter++;

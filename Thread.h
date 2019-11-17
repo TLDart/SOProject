@@ -42,3 +42,4 @@ void *create_flights(void *pointer);
 void *get_message_from_pipe(void *arg);
 void *departure(void *arg);
 void *arrival(void *arg);
+void print_msg(struct message* node);
