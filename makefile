@@ -1,5 +1,5 @@
 CC = gcc
-OBJS = Airport.o LinkedList.o Parsing.o Thread.o ThreadCT.o
+OBJS = Main.o Parser.o Structures.o ControlTower.o
 PROG = airport
 FLAGS = -Wall -O -g -pthread
 MATH = -lm
@@ -19,14 +19,14 @@ ${PROG}: ${OBJS}
 
 ################ DEPENDECIES ###############
 
-Airport.o: Airport.c Airport.h LinkedList.o ThreadCT.o
+Main.o: Main.c Main.h Parser.o ControlTower.o
 
-LinkedList.o: LinkedList.c LinkedList.h
+Parser.o: Parser.c Parser.h Structures.o
 
-Parsing.o: Parsing.c Parsing.h LinkedList.h
+Structures.o: Structures.c Structures.h
 
-Thread.o : Parsing.h Thread.c Thread.h
+ControlTower.o: ControlTower.c ControlTower.h
 
-ThreadCT.o: ThreadCT.h ThreadCT.c Thread.h
+
 
 

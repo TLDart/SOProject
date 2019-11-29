@@ -1,8 +1,0 @@
-//
-// Created by TLDart on 11/11/2019.
-//
-
-#ifndef PROJECTWORK_SCHEDULER_H
-#define PROJECTWORK_SCHEDULER_H
-
-#endif //PROJECTWORK_SCHEDULER_H

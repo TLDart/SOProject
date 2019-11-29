@@ -1,4 +1,4 @@
 /cmake-build-remote/
 /cmake-build-debug/
-/CMakeLists.txt
 /.idea
+/runner.sh

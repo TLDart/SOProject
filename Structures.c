@@ -1,5 +1,4 @@
-
-#include "LinkedList.h"
+#include "Structures.h"
 
 p_node create_list() {
     /* Creates a linked list with header
@@ -33,10 +32,10 @@ void add_flight(p_node node, p_node head) {
     actual = temp->next; //passa o header da lista a frente
     node->next = NULL;
 
-        while (actual != NULL && node->init > actual->init) {
-            ant = actual;
-            actual = actual->next;
-        }
+    while (actual != NULL && node->init > actual->init) {
+        ant = actual;
+        actual = actual->next;
+    }
 
     ant->next = node;
     node->next = actual;
@@ -65,12 +64,11 @@ void print_list(p_node head) {
      * Parameters:
      *      head - Head of the p_node list;
      *
-     *
      */
     p_node temp = head -> next;
     while (temp != NULL) {
         //print_node(head->next);
-       printf("MODE:[%s] INIT: [%d]\n", temp->mode, temp->init);
+        printf("MODE:[%s] INIT: [%d]\n", temp->mode, temp->init);
         temp = temp->next;
     }
 }

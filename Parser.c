@@ -1,5 +1,4 @@
-#include "Parsing.h"
-
+#include "Parser.h"
 extern pthread_mutex_t mutex_write, mutex_time;
 extern shared_mem* airport;
 
@@ -91,7 +90,6 @@ p_node parsing(char *string){
                 flag = 1;
             }
 
-
             for (e = 2; e < strlen(temp); e++) {
                 if ((temp[e]) > 57 || (temp[e]) < 48) {
                     flag = 1;
@@ -170,7 +168,7 @@ p_node parsing(char *string){
                 nodo->fuel = atoi(vector[7]);
                 nodo->next = NULL;
             } else {
-                printf("WRONG COMMAND =>%s\n", string );
+                //printf("WRONG COMMAND =>%s\n", string );
                 write_to_log(msgwrong);
                 return NULL;
             }
@@ -178,26 +176,26 @@ p_node parsing(char *string){
         } else {
             free(nodo);
             free(vector);
-            printf("WRONG COMMAND => %s\n", string );
+            //printf("WRONG COMMAND => %s\n", string );
             write_to_log(msgwrong);
             return NULL;
         }
         pthread_mutex_lock(&mutex_time);
         if(nodo->init < airport->time){
             pthread_mutex_unlock(&mutex_time);
-            printf("WRONG COMMAND [TIME IS GREATER THAN INIT] => %s\n", string );
+            //printf("WRONG COMMAND [TIME IS GREATER THAN INIT] => %s\n", string );
             write_to_log(msgtimeout);
             return NULL;
         }
         pthread_mutex_unlock(&mutex_time);
-        printf("NEW COMMAND => %s\n", string );
+        //printf("NEW COMMAND => %s\n", string );
         write_to_log(msgright);
         return nodo;
     }
     else{
         free(vector);
         free(nodo);
-        printf("WRONG COMMAND => %s\n", string );
+        //printf("WRONG COMMAND => %s\n", string );
         write_to_log(msgwrong);
         return NULL;
     }
