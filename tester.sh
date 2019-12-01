@@ -9,6 +9,8 @@ echo "DEPARTURE TP442 init: 13 takeoff: 125" > Pipe
 sleep 1;
 echo "DEPARTURE TP6969 init: 13 " > Pipe
 sleep 1;
+echo "DEPARTURE TP292 init: 16 takeoff: 125" > Pipe
+sleep 1;
 echo "ARRIVAL TP42 init: 0 eta: 100 fuel: 1000" > Pipe
 sleep 1;
 echo "DEPARTURE TP4 init: 12 takeoff: 125" > Pipe

@@ -3,6 +3,7 @@
 #include <string.h>
 #include <time.h>
 #include <pthread.h>
+#include <math.h>
 
 #define SIZE 200
 #define MSGTYPE_DEFAULT 2
@@ -16,11 +17,22 @@
 #define WHITE   "\x1B[37m"
 #define RESET "\x1B[0m"
 
+extern pthread_cond_t time_var;
+extern int list_element, showVerbose;
 
 typedef struct{
-    int total_flights, total_landed, total_takeoff, redirected_flights, rejected_flights;
-    double avg_ETA, avg_takeoff, avg_man_holding, avg_man_emergency;
-    int time;
+    int total_flights,
+        total_landed,
+        total_takeoff,
+        total_emergency,
+        redirected_flights,
+        rejected_flights,
+        total_holding_man,
+        total_emergency_holding_man,
+        total_time_landing,
+        total_time_takeoff;
+
+
     int max_flights[];
 }shared_mem;
 
@@ -55,16 +67,18 @@ struct sharedmem_info{//Struct used to send the position of the shared memory fr
     int position;
 };
 
-struct message_array{
-    struct message* msg;
-    struct message_array* next;
-};
 struct CT_info{
     int fuel;
     int time_to_track;
     int id;
     int pos;
     struct CT_info* next;
+};
+
+struct wt{
+    int secs;
+    int nsecs;
+
 };
 
 
@@ -74,3 +88,5 @@ void add_flight(p_node node, p_node list);
 p_node pop_flight(p_node list);
 void print_list(p_node list);
 void print_node(p_node node);
+int now_in_tm(struct timespec begin,int time_unit);
+struct wt convert_to_wait(int time, int time_unit);

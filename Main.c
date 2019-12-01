@@ -11,8 +11,9 @@ void simulation_manager(char *config_path) {
      * Parameters:
      *      config_path - specifies the config path used for initial config
      */
-    main_pid = getpid();
-    pthread_t time_thread, flight_creator;
+    clock_gettime(CLOCK_REALTIME,&begin);
+
+    pthread_t flight_creator;
 
     pthread_condattr_setpshared(&cattr,PTHREAD_PROCESS_SHARED);
     pthread_cond_init(&command_var, &cattr);
@@ -20,10 +21,10 @@ void simulation_manager(char *config_path) {
     pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED);
     pthread_mutex_init(&mutex_command, &mattr);
 
-    signal(SIGUSR1, showStats);   /*Handle Signals*/
+    signal(SIGUSR1, SIG_IGN);   /*Handle Signals*/
     signal(SIGINT, exit_handler);
 
-    clean_log(); /*ClLean "log.txt" if necessary*/
+    clean_log(); /*Clean "log.txt" if necessary*/
     logfile = fopen("log.txt", "a"); /*Opening log global pointer*/
 
     write_to_log("[PROGRAMS STARTS]");
@@ -54,12 +55,13 @@ void simulation_manager(char *config_path) {
     airport->total_flights = 0;
     airport->total_landed = 0;
     airport->total_takeoff = 0;
+    airport->total_emergency = 0;
     airport->redirected_flights = 0;
     airport->rejected_flights = 0;
-    airport->avg_ETA = 0;
-    airport->avg_takeoff = 0;
-    airport->avg_man_holding = 0;
-    airport->avg_man_emergency = 0;
+    airport->total_holding_man = 0;
+    airport->total_emergency_holding_man = 0;
+    airport->total_time_landing = 0;
+    airport->total_time_takeoff = 0;
 
     /*Create MSQ*/
     if ((mq_id = msgget(IPC_PRIVATE, IPC_CREAT | 0777)) == -1) {
@@ -83,8 +85,6 @@ void simulation_manager(char *config_path) {
     if(showVerbose == 1 ) printf("%s [NAMED PIPE CREATED]%s\n", BLUE, RESET);
 
     pthread_create(&flight_creator, NULL, create_flights, head); /*Create Flight_Creator_Thread */
-
-    pthread_create(&time_thread, NULL, time_counter, airport);  /*Create Time_Thread*/
 
     if (showVerbose == 1) printf("Correctly initiated Time Thread\n");
 
@@ -170,29 +170,6 @@ int load_config(char *path) {
     return 1;
 }
 
-void showStats(int signum) {
-    /* Prints the stats to stdout
-     *
-     * Parameters:
-     *      signum = signal number
-     */
-    //TODO: sigprockmask instead of this
-    signal(SIGUSR1, showStats);
-    pthread_mutex_lock(&mutex_stats);
-    printf("Timer %d", airport->time);
-    printf("Total number of flights : %d\n", airport->total_flights);
-    printf("Total flights that Landed: %d\n", airport->total_landed);
-    printf("Estimated wait time : %lf\n", airport->avg_ETA);
-    printf("Total Flights that TookOff: %d\n", airport->total_takeoff);
-    printf("Average TakeOff Time : %lf\n", airport->avg_takeoff);
-    printf("Average number of holding maneuvers per landing : %lf\n", airport->avg_man_holding);
-    printf("Average number of maneuvers per Emergency Time : %lf\n", airport->avg_man_emergency);
-    printf("Total redirected flights : %d\n", airport->redirected_flights);
-    printf("Total rejected flights : %d\n", airport->rejected_flights);
-    pthread_mutex_unlock(&mutex_stats);
-
-}
-
 
 void exit_handler(int signum) {
     /* Changes some flags and prepares the program to exit
@@ -201,14 +178,10 @@ void exit_handler(int signum) {
      *      signum - Number to the signal
      */
     write_to_log("[PROGRAM ENDING]");
-
     running = 0;
 
     /*Setting the pipe to non block*/
     fcntl(pipe_fd, F_SETFL, O_NONBLOCK);
-
-    //remover o mutex_write usado no write_to_log, para ficarem todos juntos, podem mudar-se todos os outros para depois desta instrução
-    pthread_mutex_destroy(&mutex_write);
 
 }
 
@@ -229,9 +202,6 @@ void parse_arguments(int argc, char **argv) {
      *
      * */
     for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "-t") == 0) {
-            showTime = 1;
-        }
         if (strcmp(argv[i], "-v") == 0) {
             showVerbose = 1;
         }
@@ -296,31 +266,15 @@ void get_message_from_pipe(int file_d) {
         }
     }
      /*Read last bytes from the disk and send them the log file*/
-    puts("Cleaning Pipe");
+    if(showVerbose == 1 )puts("Cleaning Pipe");
     while((nread = read(file_d, buffer, BUFFER_SIZE)) > 0){
         write_to_log(buffer);
     }
+    if(showVerbose == 1 ) puts("Cleaned Pipe");
+
 }
 
 /*Threaded Functions*/
-
-    void *time_counter(void *arg) {
-        /* Count time according to the time Unit variable read from config
-         *
-         *
-         */
-        puts("TIME-COUNTER THREAD CREATED");
-        while (1) {
-            pthread_mutex_lock(&mutex_time);
-            airport->time++;
-            if (showTime == 1) printf("[TIME] : %d\n", airport->time);
-            pthread_mutex_unlock(&mutex_time);
-            pthread_cond_broadcast(&time_var);
-
-            /*Converting ms to us*/
-            usleep(time_unit * 1000);
-        }
-    }
 
     void *create_flights(void *pointer) {
         /* Thread Function That handle flight Creation. Verifies the heads of the Linked list and checks if it is time for a flight to be created
@@ -328,15 +282,40 @@ void get_message_from_pipe(int file_d) {
          * Parameters:
          *      pointer - Pointer to struct of type p_node which is the head of the list
          */
-        printf("FLIGHT CREATOR");
+        printf("FLIGHT CREATOR\n");
         p_node list = head, flight;
         pthread_t thread; //New thread to be Created
         struct args_threads *args;// Pointer to struct that holds flight information, this struct will be handed to the flight on creation
 
+        pthread_mutex_lock(&mutex_time);
         while (running || list->next != NULL) {
             flight = list->next;
+            if(flight == NULL){
+                //printf("%sNULL ELEMENT%s\n", RED,RESET);
+                pthread_cond_wait(&time_var, &mutex_time);
+            }
+            else{
+                struct timespec waiting_time;
+                clock_gettime(CLOCK_REALTIME,&waiting_time);
+                struct wt t = convert_to_wait(flight->init - now_in_tm(begin,time_unit), time_unit);
+                //printf(" ->>>NSECS %ld \n",  waiting_time.tv_nsec);
+                waiting_time.tv_sec += t.secs;
+                if(waiting_time.tv_nsec + t.nsecs >= 1000000000){ //If time nanosecs overflow max value we add 1 second to tv_sec and add the modulus to the nsec
+                    waiting_time.tv_sec += 1;
+                    waiting_time.tv_nsec = (waiting_time.tv_nsec + t.nsecs) % 1000000000;
+                    //waiting_time.tv_nsec = 0;
+                    //printf("NANSEC OVEFLOW  %ld\n", waiting_time.tv_nsec);
+                }
+                else{
+                    waiting_time.tv_nsec += t.nsecs; // if it does not overflow just add the nano ecs
+                }
+                //printf(" NSECS %ld\n",  waiting_time.tv_nsec);
+                pthread_cond_timedwait(&time_var, &mutex_time, &waiting_time); //to the correct timed wait
+
+            }
+            //printf("%sPROGRAM TIME : %d %s \n", RED,now_in_tm(begin,time_unit),RESET);
             //Verify, with mutual exclusion and condition variable, if it is time for the flight to be created
-            while (flight != NULL && flight->init <= airport->time) {
+            while (flight != NULL && flight->init <= now_in_tm(begin, time_unit)) {
                 args = (struct args_threads *) malloc(sizeof(struct args_threads)); //Needs to be freed from within the departure/ arrival function;
                 args->id = ids;
                 args->node = flight;//TODO: This pointer needs to be freed
@@ -345,10 +324,11 @@ void get_message_from_pipe(int file_d) {
                 if (strcmp(flight->mode, "DEPARTURE") == 0) {
                     pthread_create(&thread, NULL, departure, args);
                     airport->total_flights++;
+                    list_element++;
                 } else if (strcmp(flight->mode, "ARRIVAL") == 0) {
                     pthread_create(&thread, NULL, arrival, args);
                     airport->total_flights++;
-
+                    list_element++;
                 } else {
                     puts("[THREAD CREATION ERROR]");
                     write_to_log("[THREAD CREATION ERROR]");
@@ -356,9 +336,10 @@ void get_message_from_pipe(int file_d) {
                 ids++; //Increment Thread Unique ID
                 list->next = list->next->next; //Removes from list without destroying node
                 flight = list->next;
+                //print_list(head);
             }
-            usleep(time_unit * 1000);
         }
+        pthread_mutex_unlock(&mutex_time);
         pthread_exit(NULL);
     }
 
@@ -402,10 +383,20 @@ void get_message_from_pipe(int file_d) {
         }
         printf("%s[THREAD][RECEIVED MSG SUCCESSFULLY] [MYID] %ld [POS] %d\n%s",CYAN,temp.msgtype,temp.position, RESET);
 
+        /*
         for(int i  = 0; i < 10; i++){
             printf("%d ", airport->max_flights[i]);
+            puts("");
+         }*/
+
+        if(temp.position == -1){
+            aux = (char *) malloc(sizeof(char) * SIZE);
+            sprintf(aux, "[THREAD DELETED] [FLIGHT CODE] %s", data->node->flight_code);
+            write_to_log(aux);
+            free(aux);
+            pthread_exit(NULL);//Exited due to being rejected
         }
-        puts("");
+
         //Post Thread Activity
         pthread_mutex_lock(&mutex_command);
         while (command == 1) {//colocar a condicao uma vez a shared memory criada com as posicoes para os comandos
@@ -442,6 +433,7 @@ void get_message_from_pipe(int file_d) {
         aux = (char *) malloc(sizeof(char) * SIZE);
         sprintf(aux, "[THREAD DELETED] [FLIGHT CODE] %s", data->node->flight_code);
         write_to_log(aux);
+        free(aux);
         free(data->node);
         free(data);
         pthread_exit(NULL);
@@ -470,6 +462,7 @@ void get_message_from_pipe(int file_d) {
         /*MSQ Messaging*/
         if (data->node->fuel <= emergency_condition) {
             msg.msgtype = MSGTYPE_PRIORITY;
+            airport->total_emergency++;
         } else {
             msg.msgtype = MSGTYPE_DEFAULT;
         }
@@ -494,6 +487,14 @@ void get_message_from_pipe(int file_d) {
         printf("%s[THREAD][RECEIVED MSG SUCCESSFULLY] [MYID] %ld [POS] %d\n%s",CYAN,temp.msgtype,temp.position, RESET);
         //Wait for command loop
 
+        if(temp.position == -1){\
+            aux = malloc(sizeof(char) * BUFFER_SIZE);
+            sprintf(aux, "[THREAD DELETED] [FLIGHT CODE] : %s [THREAD REJECTED]", data->node->flight_code);
+            write_to_log(aux);
+            free(aux);
+            pthread_exit(NULL);//Exited due to being rejected
+        }
+
         pthread_mutex_lock(&mutex_command);
         while (airport->max_flights[temp.position] == 1){//verifica se recebeu o comando para aterrar ou para ir para outro aeroporto, se receber sai
             printf("%s[THREAD][WAITING FOR COMMAND] [MYID] %ld [POS] %d\n%s",YELLOW,temp.msgtype,temp.position, RESET);
@@ -502,7 +503,7 @@ void get_message_from_pipe(int file_d) {
             printf("READ NEW COMMAND SUCESSFULLY %d", command);
             if (airport->max_flights[temp.position] == 7) {//se receber um holding escreve essa informacao no log
                 aux = (char *) malloc(sizeof(char) * SIZE);
-                sprintf(aux, "%s HOLDING %2.lf", data->node->flight_code, airport->avg_man_holding);//TODO:RECHECK THIS
+                sprintf(aux, "%s HOLDING", data->node->flight_code);//TODO:RECHECK THIS
                 //write_to_log function "{fligth_code} HOLDING {tempo de holding}"
                 //A hora nao sei bem como fazer, usamos o tempo do pc? Ou temos um inicializador separado? O nosso timer nao serve para aquilo
                 //o fligth_code vai buscar-se usando info -> nodo -> fligth_code
@@ -542,6 +543,7 @@ void get_message_from_pipe(int file_d) {
         aux = malloc(sizeof(char) * BUFFER_SIZE);
         sprintf(aux, "[THREAD DELETED] [FLIGHT CODE] : %s", data->node->flight_code);
         write_to_log(aux);
+        free(aux);
 
         free(data->node);
         free(data);

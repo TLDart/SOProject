@@ -1,3 +1,4 @@
+#include <math.h>
 #include "Parser.h"
 extern pthread_mutex_t mutex_write, mutex_time;
 extern shared_mem* airport;
@@ -180,14 +181,12 @@ p_node parsing(char *string){
             write_to_log(msgwrong);
             return NULL;
         }
-        pthread_mutex_lock(&mutex_time);
-        if(nodo->init < airport->time){
-            pthread_mutex_unlock(&mutex_time);
+        //printf("CURRENT TIME %lf\n", gettime());
+        if(nodo->init < now_in_tm(begin, time_unit)){
             //printf("WRONG COMMAND [TIME IS GREATER THAN INIT] => %s\n", string );
             write_to_log(msgtimeout);
             return NULL;
         }
-        pthread_mutex_unlock(&mutex_time);
         //printf("NEW COMMAND => %s\n", string );
         write_to_log(msgright);
         return nodo;
@@ -200,6 +199,9 @@ p_node parsing(char *string){
         return NULL;
     }
 }
+
+
+
 /* DEBUG
 int main(){
     p_node node = parsing("DEPARTURE TP440 init: 0 takeoff: 100");
