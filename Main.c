@@ -15,11 +15,7 @@ void simulation_manager(char *config_path) {
 
     pthread_t flight_creator;
 
-    pthread_condattr_setpshared(&cattr,PTHREAD_PROCESS_SHARED);
-    pthread_cond_init(&command_var, &cattr);
 
-    pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED);
-    pthread_mutex_init(&mutex_command, &mattr);
 
     signal(SIGUSR1, SIG_IGN);   /*Handle Signals*/
     signal(SIGINT, exit_handler);
@@ -52,6 +48,12 @@ void simulation_manager(char *config_path) {
     airport = shmat(shmid, NULL, 0);
     memset(airport->max_flights, 0, (max_landings + max_takeoffs) * sizeof(int));
 
+    pthread_condattr_setpshared(&airport->cattr,PTHREAD_PROCESS_SHARED);
+    pthread_cond_init(&airport->command_var, &airport->cattr);
+
+    pthread_mutexattr_setpshared(&airport->mattr, PTHREAD_PROCESS_SHARED);
+    pthread_mutex_init(&airport->mutex_command, &airport->mattr);
+
     airport->total_flights = 0;
     airport->total_landed = 0;
     airport->total_takeoff = 0;
@@ -75,7 +77,6 @@ void simulation_manager(char *config_path) {
         control_tower();
         exit(0);
     }
-
 
     /*Create named pipe*/
     unlink(PIPE_NAME);
@@ -398,15 +399,15 @@ void get_message_from_pipe(int file_d) {
         }
 
         //Post Thread Activity
-        pthread_mutex_lock(&mutex_command);
+        pthread_mutex_lock(&airport->mutex_command);
         while (command == 1) {//colocar a condicao uma vez a shared memory criada com as posicoes para os comandos
             printf("%s[THREAD][WAITING FOR COMMAND] [MYID] %ld [POS] %d%s\n",YELLOW,temp.msgtype,temp.position, RESET);
-            pthread_cond_wait(&command_var, &mutex_command);
+            pthread_cond_wait(&airport->command_var, &airport->mutex_command);
             printf("%s READ NEW COMMAND SUCCESSFULLY %d %s\n", RED,command, RESET);
             command = airport->max_flights[temp.position];
 
         }
-        pthread_mutex_unlock(&mutex_command);
+        pthread_mutex_unlock(&airport->mutex_command);
         puts("HERE");
         if (command == 2) {
             strcpy(track, "R1");
@@ -496,10 +497,10 @@ void get_message_from_pipe(int file_d) {
             pthread_exit(NULL);//Exited due to being rejected
         }
 
-        pthread_mutex_lock(&mutex_command);
+        pthread_mutex_lock(&airport->mutex_command);
         while (airport->max_flights[temp.position] == 1){//verifica se recebeu o comando para aterrar ou para ir para outro aeroporto, se receber sai
             printf("%s[THREAD][WAITING FOR COMMAND] [MYID] %ld [POS] %d\n%s",YELLOW,temp.msgtype,temp.position, RESET);
-            pthread_cond_wait(&command_var, &mutex_command);
+            pthread_cond_wait(&airport->command_var, &airport->mutex_command);
             command = airport->max_flights[temp.position];
             printf("READ NEW COMMAND SUCESSFULLY %d", command);
             if (airport->max_flights[temp.position] == 7) {//se receber um holding escreve essa informacao no log
@@ -514,7 +515,7 @@ void get_message_from_pipe(int file_d) {
                 free(aux);
             }
         }
-        pthread_mutex_unlock(&mutex_command);
+        pthread_mutex_unlock(&airport->mutex_command);
 
         //Command receiving behaviour
 

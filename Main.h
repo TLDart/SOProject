@@ -52,11 +52,7 @@ struct timespec begin; //Records the beginning of the program
 int list_element = 0; // Keeps track of the supposed beginning of the list
 /*Conditional Variables and Mutexes*/
 pthread_cond_t time_var = PTHREAD_COND_INITIALIZER;
-pthread_cond_t command_var;
-pthread_condattr_t cattr;
 pthread_mutex_t mutex_time = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t mutex_command;
-pthread_mutexattr_t mattr;
 
 
 void write_to_log(char *msg);

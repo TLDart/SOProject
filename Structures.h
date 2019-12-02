@@ -31,7 +31,10 @@ typedef struct{
         total_emergency_holding_man,
         total_time_landing,
         total_time_takeoff;
-
+        pthread_cond_t command_var;
+        pthread_condattr_t cattr;
+        pthread_mutex_t mutex_command;
+        pthread_mutexattr_t mattr;
 
     int max_flights[];
 }shared_mem;
@@ -80,7 +83,6 @@ struct wt{
     int nsecs;
 
 };
-
 
 p_node create_list();
 

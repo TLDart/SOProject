@@ -20,7 +20,6 @@ struct list_arrival *arrival_list;
 struct list_departure *departure_list;
 pthread_cond_t flight_type_var;
 pthread_mutex_t flight_type_mutex;
-sem_t *mutex;
 struct list_arrival{
     int priority;//0-EMERGENCY 1-NORMAL
     int eta;
@@ -37,7 +36,7 @@ struct list_departure{
     struct list_departure *next;
 };
 
-
+void control_tower();
 struct CT_info* create_ct_info();
 void fuel_decrement(void* arg);
 void add_ct_info(struct CT_info* node, struct CT_info* head);

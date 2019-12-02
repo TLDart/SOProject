@@ -13,10 +13,9 @@ void control_tower() {
     departure_list = create_departure_list();
     pthread_t msg_reader, dec_fuel;
     puts("CONTROL TOWER CREATED");
-
     // Insert Control Tower Code
-    //pthread_create(&msg_reader, NULL, get_messages, NULL);
-    //pthread_create(&dec_fuel, NULL, decrement_eta,arrival_list);
+    pthread_create(&msg_reader, NULL, get_messages, NULL);
+    pthread_create(&dec_fuel, NULL, decrement_eta,arrival_list);
     choose_flights_to_work(arrival_list,departure_list);
     //sleep(10);
     //pthread_join(msg_reader, NULL);
@@ -343,8 +342,8 @@ void choose_flights_to_hold(struct list_arrival *header){
                     airport -> max_flights[temp -> shared_memory_index] = 7;//Notify the thread that it need to hold
                     airport->total_holding_man++;
                     airport->total_time_landing += time_to_hold;
-                    if(list->priority == 1) airport->total_emergency_holding_man = 0;
-                    pthread_cond_broadcast(&command_var);//notifica a thread para esta ver a mensagem
+                    if(list->priority == 1) airport->total_emergency_holding_man++;
+                    pthread_cond_broadcast(&airport->command_var);//notifica a thread para esta ver a mensagem
 
                     pop_arrival(header, temp);//Removes node from the list
                     add_arrival(header, temp);//adiciona o nodo na posicao certa da lista
@@ -354,7 +353,7 @@ void choose_flights_to_hold(struct list_arrival *header){
                     //If holding is not possible, Redirect flight
                     temp = list;//guardo o nodo para poder remove-lo da lista
                     airport -> max_flights[temp -> shared_memory_index] = 8;
-                    pthread_cond_broadcast(&command_var);
+                    pthread_cond_broadcast(&airport-> command_var);
                     airport->redirected_flights++;
                     list = list -> next;//passa para o proximo nodo
                     pop_arrival(header, temp);//Pop node from the list
@@ -471,12 +470,7 @@ void remove_departure(struct list_departure *header, struct list_departure *node
 }
 
 void choose_flights_to_work(struct list_arrival *header_arrival, struct list_departure *header_departure){
-    printf("STARTED CHOOSING FLIGHTS\n");
-    /*
-    if(sem_init(mutex, 0, 1) < 0) printf("FUCK\n");//Initialization
-    else{
-        printf("DO SMT")     ;
-    }*/
+
     struct wt time_to_process;//e o eta ou o takeoff, e o tempo que precisa de ser processado para o timedwait
     struct timespec time_for_timedwait;
 
@@ -485,15 +479,8 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
 
     int aux = 0;
     int temp = 0;
-    int flight_type; // 1-ARRIVAL 0-DEPARTURE
     int counter = 0; //simula a variavel global que quero colocar:
-
-    //-> se estiver a 2 ---> a thread nao e interrompida quando chega um voo novo
-    //-> se estiver a 1 ---> a thread e interrompida se e so se chegar um voo do mesmo tipo
-    //-> se estiver a 0 ---> a thread e interrompida quando chegar um voo
-
-
-    printf("STARTED CHOOSING FLIGHTS PT2\n");
+    printf("STARTED CHOOSING FLIGHTS\n");
     //colocar um mutex nesta variavel porque quando estou a colocar outro voo tenho de o fazer sem esta estar a ser lida pela control tower
     if(header_arrival == NULL && header_departure == NULL){
         printf("Arrival and departure list were nor created with success\n");
@@ -507,9 +494,7 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
         counter = 0;
         //muda o flight type para arrival
         //Assim a thread so e perturbada se o voo que chegar a control tower for arrival
-        sem_wait(mutex);
-        flight_type = 1;
-        sem_post(mutex);
+
 
 
         pthread_mutex_lock(&flight_type_mutex);
@@ -533,6 +518,8 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
                         airport -> max_flights[arrival -> shared_memory_index] = 6;
                     }
 
+                    pthread_cond_broadcast(&airport->command_var);
+
                     aux ++;
                     //retira o voo do array
                     remove_arrival(header_arrival, arrival);
@@ -552,7 +539,7 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
 
                     airport -> max_flights[arrival -> next -> shared_memory_index] = 6;
 
-
+                    pthread_cond_broadcast(&airport->command_var);
                     aux = 2;
                     //retira o voo do array
                     remove_arrival(header_arrival, arrival -> next);
@@ -560,11 +547,9 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
 
 
                     temp = pthread_cond_timedwait(&flight_type_var, &flight_type_mutex, &time_for_timedwait);
-
                 }
 
             }
-
             else{
                 aux = 2;//se o eta nao for igual a 0 quero que passe para ir ver se pode fazer alguma departure
             }
@@ -579,9 +564,6 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
 
         //muda o flight type para departure
         //Assim a thread so e perturbada se o voo que chegar a control tower for departure
-        sem_wait(mutex);
-        flight_type = 0;
-        sem_post(mutex);
 
 
         pthread_mutex_lock(&flight_type_mutex);
@@ -603,6 +585,8 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
                         airport -> max_flights[departure -> shared_memory_index] = 3;
                     }
 
+                    pthread_cond_broadcast(&airport->command_var);
+
                     aux ++;
 
                     //retirar o voo do array
@@ -618,6 +602,8 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
 
                     airport -> max_flights[departure -> shared_memory_index] = 2;
                     airport -> max_flights[departure -> next -> shared_memory_index] = 3;
+
+                    pthread_cond_broadcast(&airport->command_var);
 
                     aux = 2;
 
@@ -663,6 +649,9 @@ void * decrement_eta(void* arg){
                     if(arrival -> eta > 0){
                         arrival -> eta --;
                         //puts("DECREMENTED SUCCESSFULLY");
+                    }
+                    else{
+                        puts("\t\tARRIVAL A 0000000000");
                     }
                     arrival = arrival->next;
                 }
