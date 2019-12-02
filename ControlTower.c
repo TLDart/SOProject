@@ -20,7 +20,6 @@ void control_tower() {
     //sleep(10);
     //pthread_join(msg_reader, NULL);
     //pthread_join(dec_fuel, NULL);
-    puts("K THEN");
 }
 
 void showStatistics(int signum) {
@@ -59,7 +58,6 @@ struct CT_info* create_ct_info(){
 
 void add_ct_info(struct CT_info* node, struct CT_info* head) {
     /* Adds message_array type element to the  end of the list
-     * TODO: Scheduler
      *
      * Parameters:
      *      node - p_node type element that we want to add to our list
@@ -477,6 +475,9 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
     struct list_arrival *arrival;
     struct list_departure *departure;
 
+
+
+
     int aux = 0;
     int temp = 0;
     int counter = 0; //simula a variavel global que quero colocar:
@@ -524,8 +525,8 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
                     //retira o voo do array
                     remove_arrival(header_arrival, arrival);
 
-
-                    temp = pthread_cond_timedwait(&flight_type_var, &flight_type_mutex, &time_for_timedwait);
+                    nanosleep(&time_for_timedwait,NULL);
+                    //temp = pthread_cond_timedwait(&flight_type_var, &flight_type_mutex, &time_for_timedwait);
                 }
                 else if(arrival -> next != NULL && arrival -> next -> eta == 0){//executa dois da lista de arrivals
                     counter = 2;
@@ -545,8 +546,8 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
                     remove_arrival(header_arrival, arrival -> next);
                     remove_arrival(header_arrival, arrival);
 
-
-                    temp = pthread_cond_timedwait(&flight_type_var, &flight_type_mutex, &time_for_timedwait);
+                    nanosleep(&time_for_timedwait,NULL);
+                    //temp = pthread_cond_timedwait(&flight_type_var, &flight_type_mutex, &time_for_timedwait);
                 }
 
             }
@@ -593,8 +594,14 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
                     remove_departure(header_departure, departure);
 
                     time_to_process = convert_to_wait(takeoff_time + takeoff_delta, time_unit);
-                    time_for_timedwait = timedwait_time(time_to_process);
-                    pthread_cond_timedwait(&flight_type_var, &flight_type_mutex, &time_for_timedwait);
+                    //time_for_timedwait = timedwait_time(time_to_process);
+                    time_for_timedwait.tv_sec = time_to_process.secs;
+                    time_for_timedwait.tv_nsec = time_to_process.nsecs;
+
+                    //usleep(takeoff_time + takeoff_delta))
+                    //sleep(10);
+                    //nanosleep(&time_for_timedwait,NULL);
+                    //pthread_cond_timedwait(&flight_type_var, &flight_type_mutex, &time_for_timedwait);
 
                 }
                 else if(departure -> next != NULL && compare_time(begin, convert_to_wait(departure -> next -> takeoff, time_unit)) == 1){
@@ -612,8 +619,13 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
                     remove_departure(header_departure, departure);
 
                     time_to_process = convert_to_wait(takeoff_time + takeoff_delta, time_unit);
-                    time_for_timedwait = timedwait_time(time_to_process);
-                    pthread_cond_timedwait(&flight_type_var, &flight_type_mutex, &time_for_timedwait);//nao sei se e a melhor approach de fazer a thread esperar, sleep aqui tambem nao ficava mal
+                    //time_for_timedwait = timedwait_time(time_to_process);
+
+                    time_for_timedwait.tv_sec = time_to_process.secs;
+                    time_for_timedwait.tv_nsec = time_to_process.nsecs;
+                    //sleep(10);
+                    nanosleep(&time_for_timedwait,NULL);
+                    //pthread_cond_timedwait(&flight_type_var, &flight_type_mutex, &time_for_timedwait);//nao sei se e a melhor approach de fazer a thread esperar, sleep aqui tambem nao ficava mal
                 }
             }
             else{
@@ -628,7 +640,6 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
         counter = 0;
 
     }
-    puts("REACHES END");
 }
 
 //funcao que decrementa o eta dos arrivals
@@ -648,10 +659,8 @@ void * decrement_eta(void* arg){
                 while(arrival != NULL){
                     if(arrival -> eta > 0){
                         arrival -> eta --;
+                        arrival ->fuel--;
                         //puts("DECREMENTED SUCCESSFULLY");
-                    }
-                    else{
-                        puts("\t\tARRIVAL A 0000000000");
                     }
                     arrival = arrival->next;
                 }

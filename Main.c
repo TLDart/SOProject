@@ -407,8 +407,7 @@ void get_message_from_pipe(int file_d) {
             command = airport->max_flights[temp.position];
 
         }
-        pthread_mutex_unlock(&airport->mutex_command);
-        puts("HERE");
+        pthread_mutex_unlock(&airport->mutex_command);;
         if (command == 2) {
             strcpy(track, "R1");
         } else if (command == 3) {
