@@ -15,6 +15,7 @@
 #include <errno.h>
 #include "Parser.h"
 #include <sys/time.h>
+#include <semaphore.h>
 #define PIPE_NAME "Pipe"
 #define BUFFER_SIZE 250
 
@@ -43,7 +44,8 @@ int shmid, /*Shared memory ID*/
     shared_mem *airport; // Shared memory variable
     p_node head; // head of the linked list
 
-struct CT_info *arrival_list, *departure_list;
+//struct list_arrival *arrival_list;
+//struct list_departure *departure_list;
 
 /*Other Variables*/
 struct timespec begin; //Records the beginning of the program
@@ -53,10 +55,9 @@ pthread_cond_t time_var = PTHREAD_COND_INITIALIZER;
 pthread_cond_t command_var;
 pthread_condattr_t cattr;
 pthread_mutex_t mutex_time = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t mutex_write = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t mutex_stats = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex_command;
 pthread_mutexattr_t mattr;
+
 
 void write_to_log(char *msg);
 void clean_log();

@@ -15,7 +15,7 @@ echo "ARRIVAL TP42 init: 0 eta: 100 fuel: 1000" > Pipe
 sleep 1;
 echo "DEPARTURE TP4 init: 12 takeoff: 125" > Pipe
 sleep 1;
-echo "ARRIVAL TP12 init: 23 eta: 250 fuel: 500" > Pipe
+echo "ARRIVAL TP12 init: 10 eta: 250 fuel: 500" > Pipe
 sleep 1;
 echo "Gibberish" > Pipe
 sleep 1;

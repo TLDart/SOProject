@@ -436,6 +436,7 @@ void get_message_from_pipe(int file_d) {
         free(aux);
         free(data->node);
         free(data);
+        printf("%s THREAD EXITED SUCCESSFULLY \n%s", MAGENTA,RESET);
         pthread_exit(NULL);
     }
 
@@ -547,6 +548,7 @@ void get_message_from_pipe(int file_d) {
 
         free(data->node);
         free(data);
+        printf("%s THREAD EXITED SUCCESSFULLY \n%s", MAGENTA,RESET);
         pthread_exit(NULL);
     }
 
