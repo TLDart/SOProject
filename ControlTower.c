@@ -28,7 +28,6 @@ void showStatistics(int signum) {
      * Parameters:
      *      signum = signal number
      */
-    //TODO: sigprockmask instead of this
     signal(SIGUSR1, showStatistics);
     printf("Total number of flights : %d\n", airport->total_flights);
     printf("Total flights that Landed: %d\n", airport->total_landed);
@@ -36,7 +35,12 @@ void showStatistics(int signum) {
     printf("Total Flights that TookOff: %d\n", airport->total_takeoff);
     printf("Average Takeoff Time : %.2lf TU\n ", (airport->total_time_takeoff * 1.0) / airport->total_takeoff);
     printf("Average number of holding maneuvers per Regular Flight : %lf\n", (airport->total_holding_man *1.0) / (airport->total_landed));
-    printf("Average number of maneuvers per Emergency Flight : %lf\n", (airport->total_emergency_holding_man *1.0) / (airport->total_emergency));
+    if(airport->total_emergency != 0){
+        printf("Average number of maneuvers per Emergency Flight : %lf\n", (airport->total_emergency_holding_man *1.0) / (airport->total_emergency));
+    }
+    else{
+        printf("Average number of maneuvers per Emergency Flight : 0\n");
+    }
     printf("Total redirected flights : %d\n", airport->redirected_flights);
     printf("Total rejected flights : %d\n", airport->rejected_flights);
 }
@@ -262,7 +266,7 @@ void pop_arrival(struct list_arrival *header, struct list_arrival *node){
         last = header;
         current = header->next;
 
-        while(current != NULL && current != node){//TODO might not work
+        while(current != NULL && current != node){
             last = current;
             current = current -> next;
         }
@@ -291,7 +295,7 @@ void remove_arrival(struct list_arrival *header, struct list_arrival *nodo){
         last = header;
         current = header -> next;
 
-        while(current != NULL && current != nodo){//TODO Verify here 2
+        while(current != NULL && current != nodo){
             last = current;
             current = current -> next;
         }
@@ -475,9 +479,6 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
     struct list_arrival *arrival;
     struct list_departure *departure;
 
-
-
-
     int aux = 0;
     int temp = 0;
     int counter = 0; //simula a variavel global que quero colocar:
@@ -495,8 +496,6 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
         counter = 0;
         //muda o flight type para arrival
         //Assim a thread so e perturbada se o voo que chegar a control tower for arrival
-
-
 
         pthread_mutex_lock(&flight_type_mutex);
         while(header_arrival -> next != NULL && (aux < 2 || temp == ETIMEDOUT) ){//verifica se ocorreu o time out, se ocorreu a vez dos arrivals passou, tem de esperar pela proxima vez
@@ -518,14 +517,16 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
                     else if(aux == 1){
                         airport -> max_flights[arrival -> shared_memory_index] = 6;
                     }
-
+                    airport->total_landed++;
                     pthread_cond_broadcast(&airport->command_var);
 
                     aux ++;
                     //retira o voo do array
                     remove_arrival(header_arrival, arrival);
 
-                    nanosleep(&time_for_timedwait,NULL);
+                    //printf("SLEEP USECS %d\n", ((takeoff_time + takeoff_delta) * time_unit) * 1000);
+                    usleep(((takeoff_time + takeoff_delta) * time_unit) * 1000);
+                    //nanosleep(&time_for_timedwait,NULL);
                     //temp = pthread_cond_timedwait(&flight_type_var, &flight_type_mutex, &time_for_timedwait);
                 }
                 else if(arrival -> next != NULL && arrival -> next -> eta == 0){//executa dois da lista de arrivals
@@ -541,12 +542,16 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
                     airport -> max_flights[arrival -> next -> shared_memory_index] = 6;
 
                     pthread_cond_broadcast(&airport->command_var);
+
+                    airport->total_landed +=2;
                     aux = 2;
                     //retira o voo do array
                     remove_arrival(header_arrival, arrival -> next);
                     remove_arrival(header_arrival, arrival);
 
-                    nanosleep(&time_for_timedwait,NULL);
+                    //printf("SLEEP USECS %d\n", ((takeoff_time + takeoff_delta) * time_unit) * 1000);
+                    usleep(((takeoff_time + takeoff_delta) * time_unit) * 1000);
+                    //nanosleep(&time_for_timedwait,NULL);
                     //temp = pthread_cond_timedwait(&flight_type_var, &flight_type_mutex, &time_for_timedwait);
                 }
 
@@ -574,7 +579,6 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
 
             if(departure != NULL && compare_time(begin, convert_to_wait(departure -> takeoff, time_unit)) == 1 ){
 
-
                 if((departure -> next != NULL && compare_time(begin, convert_to_wait(departure -> next -> takeoff, time_unit)) == -1) || departure -> next == NULL){
                     counter += 1;
 
@@ -585,7 +589,9 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
                     else if(aux == 1){
                         airport -> max_flights[departure -> shared_memory_index] = 3;
                     }
-
+                    int time = now_in_tm(begin,time_unit);
+                    airport->total_time_takeoff += (time - departure->takeoff);
+                    airport->total_takeoff++;
                     pthread_cond_broadcast(&airport->command_var);
 
                     aux ++;
@@ -598,7 +604,8 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
                     time_for_timedwait.tv_sec = time_to_process.secs;
                     time_for_timedwait.tv_nsec = time_to_process.nsecs;
 
-                    //usleep(takeoff_time + takeoff_delta))
+                    //printf("SLEEP USECS %d takeoff time %d takeoffDelta %d Time unit %d\n", ((takeoff_time + takeoff_delta) * time_unit) * 1000, takeoff_time,takeoff_delta,time_unit);
+                    usleep(((takeoff_time + takeoff_delta) * time_unit) * 1000);
                     //sleep(10);
                     //nanosleep(&time_for_timedwait,NULL);
                     //pthread_cond_timedwait(&flight_type_var, &flight_type_mutex, &time_for_timedwait);
@@ -610,7 +617,12 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
                     airport -> max_flights[departure -> shared_memory_index] = 2;
                     airport -> max_flights[departure -> next -> shared_memory_index] = 3;
 
+                    int time = now_in_tm(begin,time_unit);
+
+                    airport->total_time_takeoff += (time - departure->takeoff) + (time - departure->next->takeoff);
+
                     pthread_cond_broadcast(&airport->command_var);
+                    airport->total_takeoff +=2;
 
                     aux = 2;
 
@@ -623,8 +635,11 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
 
                     time_for_timedwait.tv_sec = time_to_process.secs;
                     time_for_timedwait.tv_nsec = time_to_process.nsecs;
+
+                    //printf("SLEEP USECS %d takeoff time %d takeoffDelta %d Time unit %d\n", ((takeoff_time + takeoff_delta) * time_unit) * 1000, takeoff_time,takeoff_delta,time_unit);
+                    usleep(((takeoff_time + takeoff_delta) * time_unit) * 1000);
                     //sleep(10);
-                    nanosleep(&time_for_timedwait,NULL);
+                    //nanosleep(&time_for_timedwait,NULL);
                     //pthread_cond_timedwait(&flight_type_var, &flight_type_mutex, &time_for_timedwait);//nao sei se e a melhor approach de fazer a thread esperar, sleep aqui tambem nao ficava mal
                 }
             }

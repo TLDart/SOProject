@@ -73,6 +73,11 @@ void simulation_manager(char *config_path) {
 
     if(showVerbose == 1 ) printf("%s [MESSAGE QUEUE CREATED]%s\n", BLUE, RESET);
     /*Create Control Tower*/
+
+    printf(" _>>>takeoff time %d takeoffDelta %d Time unit %d min_hold %d\n", takeoff_time,takeoff_delta,time_unit, min_hold);
+    //printf(" _>>>%d takeoffDelta %d Time unit %d\n", takeoff_time,takeoff_delta,time_unit);
+
+
     if (fork() == 0) {
         control_tower();
         exit(0);
@@ -131,27 +136,27 @@ int load_config(char *path) {
         if (counter == 1) {
             token = strtok(buffer, delimiter);
             config_test(token);
-            if ((takeoff_time = atoi(token) == 0 && buffer[0] != '0')) { return -1; }
+            if ((takeoff_time = atoi(token)) == 0 && buffer[0] != '0') { return -1; }
             token = strtok(NULL, delimiter);
             config_test(token);
-            if ((takeoff_delta = atoi(token) == 0 && buffer[0] != '0')) { return -1; }
+            if ((takeoff_delta = atoi(token)) == 0 && buffer[0] != '0') { return -1; }
         }
         if (counter == 2) {
             token = strtok(buffer, delimiter);
             config_test(token);
-            if ((landing_time = atoi(token) == 0 && buffer[0] != '0')) { return -1; }
+            if ((landing_time = atoi(token)) == 0 && buffer[0] != '0') { return -1; }
             token = strtok(NULL, delimiter);
             config_test(token);
-            if ((landing_delta = atoi(token) == 0 && buffer[0] != '0')) { return -1; }
+            if ((landing_delta = atoi(token)) == 0 && buffer[0] != '0') { return -1; }
 
         }
         if (counter == 3) {
             token = strtok(buffer, delimiter);
             config_test(token);
-            if ((min_hold = atoi(token) == 0 && buffer[0] != '0')) { return -1; }
+            if ((min_hold = atoi(token)) == 0 && buffer[0] != '0') { return -1; }
             token = strtok(NULL, delimiter);
             config_test(token);
-            if ((max_hold = atoi(token) == 0 && buffer[0] != '0')) { return -1; }
+            if ((max_hold = atoi(token)) == 0 && buffer[0] != '0') { return -1; }
 
         }
         if (counter == 4) {
@@ -403,9 +408,8 @@ void get_message_from_pipe(int file_d) {
         while (command == 1) {//colocar a condicao uma vez a shared memory criada com as posicoes para os comandos
             printf("%s[THREAD][WAITING FOR COMMAND] [MYID] %ld [POS] %d%s\n",YELLOW,temp.msgtype,temp.position, RESET);
             pthread_cond_wait(&airport->command_var, &airport->mutex_command);
-            printf("%s READ NEW COMMAND SUCCESSFULLY %d %s\n", RED,command, RESET);
             command = airport->max_flights[temp.position];
-
+            printf("%s READ NEW COMMAND SUCCESSFULLY %d %s\n", RED,command, RESET);
         }
         pthread_mutex_unlock(&airport->mutex_command);;
         if (command == 2) {
@@ -422,7 +426,7 @@ void get_message_from_pipe(int file_d) {
         write_to_log(aux);
         free(aux);
 
-        sleep(takeoff_time); //external global var
+        usleep((takeoff_time* time_unit) * 1000); //external global var
 
         aux = (char *) malloc(sizeof(char) * SIZE);
         sprintf(aux, "%s DEPARTURE %s concluded", data->node->flight_code, track);// TODO:Complete with departure track
@@ -526,8 +530,7 @@ void get_message_from_pipe(int file_d) {
             sprintf(aux, "%s LANDING %s started", data->node->flight_code, track);
             write_to_log(aux);
             free(aux);
-            sleep(landing_time);//Waits landing time
-            aux = (char *) malloc(sizeof(char) * SIZE);
+            usleep((landing_time * time_unit) * 1000);            aux = (char *) malloc(sizeof(char) * SIZE);
             sprintf(aux, "%s LANDING %s concluded", data->node->flight_code, track);
             printf("%s\n", aux);
             write_to_log(aux);
