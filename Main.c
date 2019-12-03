@@ -408,8 +408,9 @@ void get_message_from_pipe(int file_d) {
         while (command == 1) {//colocar a condicao uma vez a shared memory criada com as posicoes para os comandos
             printf("%s[THREAD][WAITING FOR COMMAND] [MYID] %ld [POS] %d%s\n",YELLOW,temp.msgtype,temp.position, RESET);
             pthread_cond_wait(&airport->command_var, &airport->mutex_command);
-            command = airport->max_flights[temp.position];
             printf("%s READ NEW COMMAND SUCCESSFULLY %d %s\n", RED,command, RESET);
+            command = airport->max_flights[temp.position];
+
         }
         pthread_mutex_unlock(&airport->mutex_command);;
         if (command == 2) {
@@ -441,7 +442,7 @@ void get_message_from_pipe(int file_d) {
         free(data->node);
         free(data);
         printf("%s THREAD EXITED SUCCESSFULLY \n%s", MAGENTA,RESET);
-        pthread_exit(NULL);
+        pthread_detach(pthread_self());
     }
 
 
@@ -552,7 +553,7 @@ void get_message_from_pipe(int file_d) {
         free(data->node);
         free(data);
         printf("%s THREAD EXITED SUCCESSFULLY \n%s", MAGENTA,RESET);
-        pthread_exit(NULL);
+        pthread_detach(pthread_self());
     }
 
     void print_msg(struct message *node) {

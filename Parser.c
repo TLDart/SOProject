@@ -105,6 +105,10 @@ p_node parsing(char *string){
                     }
                 }
             }
+            if(atoi(vector[3]) > atoi(vector[5])){
+                flag = 1;
+            }
+
 
 
             if (flag == 0) {
@@ -160,6 +164,11 @@ p_node parsing(char *string){
                     }
                 }
             }
+
+            if(atoi(vector[7]) < atoi(vector[5]) + 4 + landing_time){
+                flag = 1;
+            }
+
             if (flag == 0) {
                 nodo->mode = vector[0];
                 nodo->flight_code = vector[1];

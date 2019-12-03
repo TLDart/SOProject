@@ -7,7 +7,7 @@
 #include <math.h>
 #define SIZE 200
 
-extern int time_unit;
+extern int time_unit, landing_time;
 extern struct timespec begin;
 extern float time_sec;
 extern p_node head;

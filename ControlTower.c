@@ -11,6 +11,7 @@ void control_tower() {
 
     arrival_list = create_arrival_list();
     departure_list = create_departure_list();
+
     pthread_t msg_reader, dec_fuel;
     puts("CONTROL TOWER CREATED");
     // Insert Control Tower Code
