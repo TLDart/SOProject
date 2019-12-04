@@ -22,9 +22,13 @@ void control_tower() {
     pthread_create(&msg_reader, NULL, get_messages, NULL);
     pthread_create(&check_f, NULL, check_flights,&arguments);//<<<-- alterado
     choose_flights_to_work(arrival_list,departure_list);
-    //sleep(10);
-    //pthread_join(msg_reader, NULL);
-    //pthread_join(check_f, NULL);
+    puts("ENDED CHOOSE FLIGHTS");
+    pthread_join(msg_reader, NULL);
+    puts("ENDED MSG READER");
+    pthread_join(check_f, NULL);
+    puts("ENDED CHECK FLIGHTS");
+
+
 }
 
 void showStatistics(int signum) {
@@ -92,52 +96,59 @@ void *get_messages(void *arg){
     printf("[CONTROL TOWER NOW RECEIVING MESSAGES]\n");
 
     while(running) {//Reads messages until it receives a termination condition
-        if (msgrcv(mq_id, &aux, sizeof(aux) - sizeof(long), -MSGTYPE_DEFAULT, 0) == -1) {
+        if (msgrcv(mq_id, &aux, sizeof(aux) - sizeof(long), -MSGTYPE_EXIT, 0) == -1) {
             printf("ERROR RECEIVING MSQ MSG\n");
         }
         /*if(showStats == 1)*/ printf("%s -->>[CT][RECEIVED MSG SUCCESSFULLY][ID] %d [MODE] %d%s\n", CYAN, aux.id,
                                       aux.mode, RESET);
 
-        element = (struct CT_info *) malloc(sizeof(struct CT_info));//Used to store the message received by the threads;
-        element->fuel = aux.fuel;//Departing planes have no fuel
-        element->time_to_track = aux.time_to_track;
-        element->id = aux.id;
-        element->next = NULL;
+        if(aux.id == -1){
+            printf("%s GOT CLOSING MESSAGE%s", RED,RESET);
+            running = 0;
+        }
+        else {
+            element = (struct CT_info *) malloc(sizeof(struct CT_info));//Used to store the message received by the threads;
+            element->fuel = aux.fuel;//Departing planes have no fuel
+            element->time_to_track = aux.time_to_track;
+            element->id = aux.id;
+            element->next = NULL;
 
-        if ((aux.mode == 1 && counter_arriv != max_landings) || (aux.mode == 0 && counter_departs != max_takeoffs)) {
-            if ((pos = index_shm()) != -1) {
-                element->pos = pos;
+            if ((aux.mode == 1 && counter_arriv != max_landings) ||
+                (aux.mode == 0 && counter_departs != max_takeoffs)) {
+                if ((pos = index_shm()) != -1) {
+                    element->pos = pos;
+                }
+
+                if (aux.mode == 1) {//Arrival type flight
+                    add_arrival(arrival_list, create_node_arrival(element));
+                    airport->flights_arrived++;
+                    print_arrivals();
+                    if (showVerbose == 1) printf("ADDED TO ARRIVAL LIST\n");
+                } else if (aux.mode == 0) {//Departure type flight
+                    add_departure(departure_list, create_node_departure(element));
+                    airport->flights_arrived++;
+                    print_departures();
+                    if (showVerbose == 1) printf("ADDED TO DEPARTURE LIST\n");
+                } else if (aux.mode == -1) {
+                    running = 0;// -1 means that it receives order to terminate the program
+                } else { puts("ERROR ADDING FLIGHT TO ARRIVAL/DEPARTURE ARRAY"); }
+
+                //Reply to the thread with the correct shared memory position
+                info.msgtype = aux.id;//Select the correct thread ID
+                info.position = pos;
+                airport->max_flights[element->pos] = 1;
+
+            } else {
+                info.msgtype = aux.id; //Covers the case where there is not enough space
+                info.position = -1;
+                airport->rejected_flights++;
             }
-
-            if (aux.mode == 1) {//Arrival type flight
-                add_arrival(arrival_list, create_node_arrival(element));
-                print_arrivals();
-                if (showVerbose == 1) printf("ADDED TO ARRIVAL LIST\n");
-            } else if (aux.mode == 0) {//Departure type flight
-
-                add_departure(departure_list, create_node_departure(element));
-                print_departures();
-                if (showVerbose == 1) printf("ADDED TO DEPARTURE LIST\n");
-            } else if (aux.mode == -1) {
-                running = 0;// -1 means that it receives order to terminate the program
-            } else { puts("ERROR ADDING FLIGHT TO ARRIVAL/DEPARTURE ARRAY"); }
-
-            //Reply to the thread with the correct shared memory position
-            info.msgtype = aux.id;//Select the correct thread ID
-            info.position = pos;
-            airport->max_flights[element->pos] = 1;
-
-        }
-        else{
-            info.msgtype = aux.id; //Covers the case where there is not enough space
-            info.position = -1;
-            airport->rejected_flights++;
-        }
             if (msgsnd(mq_id, &info, sizeof(info) - sizeof(long), 0) == -1) { /*Fill the position in the shared memory*/
                 puts("ERROR SENDING MESSAGE (CT)");
             }
             /*if(showStats == 1)*/ printf("%s -->>[CT][SENT MSG SUCCESSFULLY][ID] %ld [POS] %d%s\n", CYAN, info.msgtype,
                                           info.position, RESET);
+        }
     }
 
     if(showVerbose == 1) printf("%s [CT] Get messages thread ended %s", RED,RESET);
@@ -654,7 +665,7 @@ void* check_flights(void *arg){
 
   if(header_arrival != NULL && header_departure != NULL){
     //decrementa o ETA
-    while(header_arrival -> next != NULL || header_departure != NULL || airport->stop_condition == 1){
+    while(header_arrival -> next != NULL || header_departure->next != NULL || running == 1){
       if(header_arrival -> next != NULL){
         arrival = header_arrival -> next;
 
@@ -692,7 +703,7 @@ void* check_flights(void *arg){
         usleep(time_unit_in_ns);//espera uma time_unit para decrementar os eta's
     }
   }
-
+  pthread_cond_broadcast(&is_it_time_var);
   pthread_exit(NULL);//ter de ser feito join <<<-- alterado
 }
 

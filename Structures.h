@@ -8,6 +8,7 @@
 #define SIZE 200
 #define MSGTYPE_DEFAULT 2
 #define MSGTYPE_PRIORITY 1
+#define MSGTYPE_EXIT 3
 #define RED "\x1B[31m"
 #define GREEN   "\x1B[32m"
 #define YELLOW   "\x1B[33m"
@@ -31,7 +32,8 @@ typedef struct{
         total_emergency_holding_man,
         total_time_landing,
         total_time_takeoff,
-        stop_condition;
+        stop_condition,
+        flights_arrived;
         pthread_cond_t command_var;
         pthread_condattr_t cattr;
         pthread_mutex_t mutex_command;

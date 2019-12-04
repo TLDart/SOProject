@@ -64,6 +64,7 @@ void simulation_manager(char *config_path) {
     airport->total_emergency_holding_man = 0;
     airport->total_time_landing = 0;
     airport->total_time_takeoff = 0;
+    airport->flights_arrived = 0;
 
     /*Create MSQ*/
     if ((mq_id = msgget(IPC_PRIVATE, IPC_CREAT | 0777)) == -1) {
@@ -80,6 +81,7 @@ void simulation_manager(char *config_path) {
 
     if (fork() == 0) {
         control_tower();
+        puts(" CT EXITED");
         exit(0);
     }
 
@@ -96,8 +98,13 @@ void simulation_manager(char *config_path) {
 
     /*Run getting a message from the pipe*/
     get_message_from_pipe(pipe_fd);
-
+    puts("PIPE CLOSED");
     /*Cleaning The system*/
+
+    pthread_join(flight_creator, NULL);
+    puts("FLIGHT CREATOR CLOSED");
+    wait(NULL);
+    puts("CONTROL TOWER DOWN");
     shmdt(airport);
     shmctl(shmid, IPC_RMID, 0);
     unlink(PIPE_NAME);
@@ -265,8 +272,8 @@ void get_message_from_pipe(int file_d) {
                     buffer[nread - 1] = '\0';
                 parsed_data = parsing(buffer); // Handle the buffer
                 if (parsed_data != NULL) {
-                    if (showVerbose == 1) print_node(parsed_data);
-                    add_flight(parsed_data, head);
+                        add_flight(parsed_data, head);
+                        airport->total_flights++;
                 }
             }
         }
@@ -277,7 +284,7 @@ void get_message_from_pipe(int file_d) {
         write_to_log(buffer);
     }
     if(showVerbose == 1 ) puts("Cleaned Pipe");
-
+    pthread_cond_broadcast(&time_var);
 }
 
 /*Threaded Functions*/
@@ -294,7 +301,7 @@ void get_message_from_pipe(int file_d) {
         struct args_threads *args;// Pointer to struct that holds flight information, this struct will be handed to the flight on creation
 
         pthread_mutex_lock(&mutex_time);
-        while (running || list->next != NULL) {
+        while (running == 1 || list->next != NULL) {
             flight = list->next;
             if(flight == NULL){
                 //printf("%sNULL ELEMENT%s\n", RED,RESET);
@@ -329,11 +336,10 @@ void get_message_from_pipe(int file_d) {
                 /*Create a thread*/
                 if (strcmp(flight->mode, "DEPARTURE") == 0) {
                     pthread_create(&thread, NULL, departure, args);
-                    airport->total_flights++;
+
                     list_element++;
                 } else if (strcmp(flight->mode, "ARRIVAL") == 0) {
                     pthread_create(&thread, NULL, arrival, args);
-                    airport->total_flights++;
                     list_element++;
                 } else {
                     puts("[THREAD CREATION ERROR]");
@@ -346,6 +352,7 @@ void get_message_from_pipe(int file_d) {
             }
         }
         pthread_mutex_unlock(&mutex_time);
+        puts("REACHED END");
         pthread_exit(NULL);
     }
 
@@ -394,6 +401,20 @@ void get_message_from_pipe(int file_d) {
             printf("%d ", airport->max_flights[i]);
             puts("");
          }*/
+        if(airport->total_flights == airport->flights_arrived){
+            puts("LAST FLIGHT");
+            msg.msgtype = MSGTYPE_EXIT;
+            msg.mode = 1;
+            msg.fuel = -1;
+            msg.time_to_track = -1;
+            msg.id = - 1;
+
+            if (msgsnd(mq_id, &msg, sizeof(msg) - sizeof(long), 0) == -1) {/*Sends message to the control tower*/
+                perror("ERROR SENDING MESSAGE");
+                exit(-1);
+            }
+
+        }
 
         if(temp.position == -1){
             aux = (char *) malloc(sizeof(char) * SIZE);
@@ -443,6 +464,7 @@ void get_message_from_pipe(int file_d) {
         free(data);
         printf("%s THREAD EXITED SUCCESSFULLY \n%s", MAGENTA,RESET);
         pthread_detach(pthread_self());
+        pthread_exit(NULL);
     }
 
 
@@ -489,8 +511,24 @@ void get_message_from_pipe(int file_d) {
             perror("ERROR RECEIVING MESSAGE");
             exit(-1);
         }
-
         printf("%s[THREAD][RECEIVED MSG SUCCESSFULLY] [MYID] %ld [POS] %d\n%s",CYAN,temp.msgtype,temp.position, RESET);
+
+        if(airport->total_flights == airport->flights_arrived){
+            puts("LAST FLIGHT");
+            msg.msgtype = MSGTYPE_EXIT;
+            msg.mode = 1;
+            msg.fuel = -1;
+            msg.time_to_track = -1;
+            msg.id = - 1;
+
+            if (msgsnd(mq_id, &msg, sizeof(msg) - sizeof(long), 0) == -1) {/*Sends message to the control tower*/
+                perror("ERROR SENDING MESSAGE");
+                exit(-1);
+            }
+
+        }
+
+
         //Wait for command loop
 
         if(temp.position == -1){\
@@ -554,6 +592,8 @@ void get_message_from_pipe(int file_d) {
         free(data);
         printf("%s THREAD EXITED SUCCESSFULLY \n%s", MAGENTA,RESET);
         pthread_detach(pthread_self());
+        pthread_exit(NULL);
+
     }
 
     void print_msg(struct message *node) {
