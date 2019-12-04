@@ -3,6 +3,7 @@
 echo "DEPARTURE TP4 init: 12 takeoff: 16" > Pipe
 sleep 1;
 echo "DEPARTURE TP52 init: 12 takeoff: 16" > Pipe
+sleep 1;
 echo "DEPARTURE TP440 init: 5 takeoff: 20" > Pipe
 sleep 1;
 echo "DEPARTURE TP441 init: 27 takeoff: 22" > Pipe

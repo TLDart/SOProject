@@ -69,3 +69,4 @@ void *create_flights(void *pointer);
 void *departure(void *arg);
 void *arrival(void *arg);
 void print_msg(struct message * node);
+void* exit_thread(void* arg);

@@ -13,9 +13,7 @@ void simulation_manager(char *config_path) {
      */
     clock_gettime(CLOCK_REALTIME,&begin);
 
-    pthread_t flight_creator;
-
-
+    pthread_t flight_creator, thread_exit;
 
     signal(SIGUSR1, SIG_IGN);   /*Handle Signals*/
     signal(SIGINT, exit_handler);
@@ -103,13 +101,17 @@ void simulation_manager(char *config_path) {
 
     pthread_join(flight_creator, NULL);
     puts("FLIGHT CREATOR CLOSED");
+    pthread_create(&thread_exit, NULL, exit_thread, NULL); /*Create Flight_Creator_Thread */
+    puts("THREAD CREATES");
+    pthread_join(thread_exit,NULL);
+    puts("THREAD EXITED");
     wait(NULL);
     puts("CONTROL TOWER DOWN");
     shmdt(airport);
     shmctl(shmid, IPC_RMID, 0);
     unlink(PIPE_NAME);
     msgctl(shmid,IPC_RMID,0);
-
+    puts("XAU LAURA");
     exit(0);
 }
 
@@ -272,6 +274,7 @@ void get_message_from_pipe(int file_d) {
                     buffer[nread - 1] = '\0';
                 parsed_data = parsing(buffer); // Handle the buffer
                 if (parsed_data != NULL) {
+                    printf("%sPARSER ADDED %s", CYAN,RESET);
                         add_flight(parsed_data, head);
                         airport->total_flights++;
                 }
@@ -401,20 +404,6 @@ void get_message_from_pipe(int file_d) {
             printf("%d ", airport->max_flights[i]);
             puts("");
          }*/
-        if(airport->total_flights == airport->flights_arrived){
-            puts("LAST FLIGHT");
-            msg.msgtype = MSGTYPE_EXIT;
-            msg.mode = 1;
-            msg.fuel = -1;
-            msg.time_to_track = -1;
-            msg.id = - 1;
-
-            if (msgsnd(mq_id, &msg, sizeof(msg) - sizeof(long), 0) == -1) {/*Sends message to the control tower*/
-                perror("ERROR SENDING MESSAGE");
-                exit(-1);
-            }
-
-        }
 
         if(temp.position == -1){
             aux = (char *) malloc(sizeof(char) * SIZE);
@@ -513,22 +502,6 @@ void get_message_from_pipe(int file_d) {
         }
         printf("%s[THREAD][RECEIVED MSG SUCCESSFULLY] [MYID] %ld [POS] %d\n%s",CYAN,temp.msgtype,temp.position, RESET);
 
-        if(airport->total_flights == airport->flights_arrived){
-            puts("LAST FLIGHT");
-            msg.msgtype = MSGTYPE_EXIT;
-            msg.mode = 1;
-            msg.fuel = -1;
-            msg.time_to_track = -1;
-            msg.id = - 1;
-
-            if (msgsnd(mq_id, &msg, sizeof(msg) - sizeof(long), 0) == -1) {/*Sends message to the control tower*/
-                perror("ERROR SENDING MESSAGE");
-                exit(-1);
-            }
-
-        }
-
-
         //Wait for command loop
 
         if(temp.position == -1){\
@@ -595,7 +568,23 @@ void get_message_from_pipe(int file_d) {
         pthread_exit(NULL);
 
     }
+void *exit_thread(void *arg){
+    struct message msg;
 
+    puts("LAST FLIGHT");
+    msg.msgtype = MSGTYPE_EXIT;
+    msg.mode = 1;
+    msg.fuel = -1;
+    msg.time_to_track = -1;
+    msg.id = - 1;
+
+    if (msgsnd(mq_id, &msg, sizeof(msg) - sizeof(long), 0) == -1) {/*Sends message to the control tower*/
+        perror("ERROR SENDING MESSAGE");
+        exit(-1);
+    }
+
+    pthread_exit(NULL);
+}
     void print_msg(struct message *node) {
         if (node != NULL) {
             puts("-------STARTING TO PRINT NODE-----------");
