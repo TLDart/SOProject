@@ -1,6 +1,8 @@
 #!/bin/bash
 
-
+echo "DEPARTURE TP4 init: 12 takeoff: 16" > Pipe
+sleep 1;
+echo "DEPARTURE TP52 init: 12 takeoff: 16" > Pipe
 echo "DEPARTURE TP440 init: 5 takeoff: 20" > Pipe
 sleep 1;
 echo "DEPARTURE TP441 init: 27 takeoff: 22" > Pipe
@@ -13,7 +15,6 @@ echo "DEPARTURE TP292 init: 16 takeoff: 13" > Pipe
 sleep 1;
 echo "ARRIVAL TP42 init: 0 eta: 30 fuel: 1000" > Pipe
 sleep 1;
-echo "DEPARTURE TP4 init: 12 takeoff: 16" > Pipe
 sleep 1;
 echo "ARRIVAL TP12 init: 10 eta: 25 fuel: 500" > Pipe
 sleep 1;

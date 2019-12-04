@@ -5,22 +5,26 @@ void control_tower() {
     /* Handles Flight Threads, shared memory communication, and Message Queue Messaging
      *
      */
-    //signal(SIGINT, SIG_IGN); /*Ignore SIGINT*/
+    signal(SIGINT, SIG_IGN); /*Ignore SIGINT*/
     signal(SIGUSR1, showStatistics);   /*Handle Signals*/
+
     printf(("PID %d\n"), getpid()); // TODO CORRECT RUNNING CONDITION
 
     arrival_list = create_arrival_list();
     departure_list = create_departure_list();
 
-    pthread_t msg_reader, dec_fuel;
+
+    arguments.arrival = arrival_list;//<<<--alterado
+    arguments.departure = departure_list;
+    pthread_t msg_reader, check_f;//<<<<-- alterado
     puts("CONTROL TOWER CREATED");
     // Insert Control Tower Code
     pthread_create(&msg_reader, NULL, get_messages, NULL);
-    pthread_create(&dec_fuel, NULL, decrement_eta,arrival_list);
+    pthread_create(&check_f, NULL, check_flights,&arguments);//<<<-- alterado
     choose_flights_to_work(arrival_list,departure_list);
     //sleep(10);
     //pthread_join(msg_reader, NULL);
-    //pthread_join(dec_fuel, NULL);
+    //pthread_join(check_f, NULL);
 }
 
 void showStatistics(int signum) {
@@ -474,15 +478,11 @@ void remove_departure(struct list_departure *header, struct list_departure *node
 
 void choose_flights_to_work(struct list_arrival *header_arrival, struct list_departure *header_departure){
 
-    struct wt time_to_process;//e o eta ou o takeoff, e o tempo que precisa de ser processado para o timedwait
-    struct timespec time_for_timedwait;
-
     struct list_arrival *arrival;
     struct list_departure *departure;
 
     int aux = 0;
-    int temp = 0;
-    int counter = 0; //simula a variavel global que quero colocar:
+
     printf("STARTED CHOOSING FLIGHTS\n");
     //colocar um mutex nesta variavel porque quando estou a colocar outro voo tenho de o fazer sem esta estar a ser lida pela control tower
     if(header_arrival == NULL && header_departure == NULL){
@@ -491,97 +491,96 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
 
 
     //colocar algo que pare a thread se nao houverem voos para executar
+    pthread_mutex_lock(&is_it_time_mutex);
 
     while(header_arrival -> next != NULL || header_departure -> next != NULL || running == 1){ //condition e a tal variavel que e alterada para dizer a control tower que o programa vai acabar
 
-        counter = 0;
-        //muda o flight type para arrival
-        //Assim a thread so e perturbada se o voo que chegar a control tower for arrival
+      ////////////            fazer wait pelo signal da thread que decrementa o eta e verifica o takeoff
+      ///////////             colocar dentro de um if, ou seja so fica a espera se o eta do voo a seguir for diferente de 0 e o takeoff do voo for diferente do momento atual (usar a funcao compare_time)
+      //////////              fazer isto em exclusao mutua, pois a decrementa_eta vai estar a alterar os valores que estao a ser acedidos aqui
+      /////////               de qualquer forma, se ficar parado num mutex, nao e espera ativa, entao OK
 
-        pthread_mutex_lock(&flight_type_mutex);
-        while(header_arrival -> next != NULL && (aux < 2 || temp == ETIMEDOUT) ){//verifica se ocorreu o time out, se ocorreu a vez dos arrivals passou, tem de esperar pela proxima vez
-            //se o aux cheagar a 2, quer dizer que foram executados dois arrivals e chegou a vez dos departures
+        //puts("-±±±±±±±±±±±ENTERS LOOP");
+      pthread_mutex_lock(&check_eta_mutex);
+      if(  (header_arrival -> next == NULL && header_departure -> next == NULL) ||  (header_arrival -> next == NULL && compare_time(begin, convert_to_wait(header_departure -> next -> takeoff, time_unit)) == -1)  ||  (header_departure -> next == NULL && header_arrival -> next -> eta != 0 )   ||  (header_arrival -> next -> eta != 0 && compare_time(begin, convert_to_wait(header_departure -> next -> takeoff, time_unit)) == -1)     ){
+          //puts("-±±±±±±±±±±±VAR1");
+          pthread_mutex_unlock(&check_eta_mutex);
+        pthread_cond_wait(&is_it_time_var, &is_it_time_mutex);//tem de ser criada esta variavel de condicao
+      }
+      else{
+        pthread_mutex_unlock(&check_eta_mutex);
+      }
+
+        //puts("-±±±±±±±±±±±SKIPS  CONDITION");
+        while(header_arrival -> next != NULL && aux < 2 ){
+            //se o aux chegar a 2, quer dizer que foram executados dois arrivals e chegou a vez dos departures
 
             arrival = header_arrival -> next;//seleciona o voo a executar
+
+            pthread_mutex_lock(&check_eta_mutex);
             if(arrival != NULL && arrival -> eta == 0){
 
-                if((arrival -> next != NULL && arrival -> next -> eta != 0) || arrival -> next == NULL){//executa apenas um da lista de arrivals
-                    counter += 1;
+                if( aux == 1 || (arrival -> next != NULL && arrival -> next -> eta != 0) || arrival -> next == NULL){//executa apenas um da lista de arrivals
+                  pthread_mutex_unlock(&check_eta_mutex);
 
-                    time_to_process = convert_to_wait(landing_time + landing_delta, time_unit);
-                    time_for_timedwait = timedwait_time(time_to_process);
+                  //manda o voo aterrar
+                  if(aux == 0){
+                      airport -> max_flights[arrival -> shared_memory_index] = 5;//diz qual e a pista a utilizar pelo voo
+                  }
+                  else if(aux == 1){
+                      airport -> max_flights[arrival -> shared_memory_index] = 6;
+                  }
+                  airport->total_landed++;
+                  pthread_cond_broadcast(&airport->command_var);
 
-                    //manda o voo aterrar
-                    if(aux == 0){
-                        airport -> max_flights[arrival -> shared_memory_index] = 5;//diz qual e a pista a utilizar pelo voo
-                    }
-                    else if(aux == 1){
-                        airport -> max_flights[arrival -> shared_memory_index] = 6;
-                    }
-                    airport->total_landed++;
-                    pthread_cond_broadcast(&airport->command_var);
+                  aux ++;
+                  //retira o voo do array
+                  remove_arrival(header_arrival, arrival);
 
-                    aux ++;
-                    //retira o voo do array
-                    remove_arrival(header_arrival, arrival);
+                  usleep(((takeoff_time + takeoff_delta) * time_unit) * 1000);
 
-                    //printf("SLEEP USECS %d\n", ((takeoff_time + takeoff_delta) * time_unit) * 1000);
-                    usleep(((takeoff_time + takeoff_delta) * time_unit) * 1000);
-                    //nanosleep(&time_for_timedwait,NULL);
-                    //temp = pthread_cond_timedwait(&flight_type_var, &flight_type_mutex, &time_for_timedwait);
                 }
                 else if(arrival -> next != NULL && arrival -> next -> eta == 0){//executa dois da lista de arrivals
-                    counter = 2;
+                  pthread_mutex_unlock(&check_eta_mutex);
 
-                    time_to_process = convert_to_wait(landing_time + landing_delta, time_unit);
-                    time_for_timedwait = timedwait_time(time_to_process);
+                  //manda o voo aterrar
 
-                    //manda o voo aterrar
+                  airport -> max_flights[arrival -> shared_memory_index] = 5;//diz qual e a pista a utilizar pelo voo
 
-                    airport -> max_flights[arrival -> shared_memory_index] = 5;//diz qual e a pista a utilizar pelo voo
+                  airport -> max_flights[arrival -> next -> shared_memory_index] = 6;
 
-                    airport -> max_flights[arrival -> next -> shared_memory_index] = 6;
+                  pthread_cond_broadcast(&airport->command_var);
 
-                    pthread_cond_broadcast(&airport->command_var);
+                  airport->total_landed +=2;
+                  aux = 2;
+                  //retira o voo do array
+                  remove_arrival(header_arrival, arrival -> next);
+                  remove_arrival(header_arrival, arrival);
 
-                    airport->total_landed +=2;
-                    aux = 2;
-                    //retira o voo do array
-                    remove_arrival(header_arrival, arrival -> next);
-                    remove_arrival(header_arrival, arrival);
+                  usleep(((takeoff_time + takeoff_delta) * time_unit) * 1000);
 
-                    //printf("SLEEP USECS %d\n", ((takeoff_time + takeoff_delta) * time_unit) * 1000);
-                    usleep(((takeoff_time + takeoff_delta) * time_unit) * 1000);
-                    //nanosleep(&time_for_timedwait,NULL);
-                    //temp = pthread_cond_timedwait(&flight_type_var, &flight_type_mutex, &time_for_timedwait);
                 }
 
             }
             else{
-                aux = 2;//se o eta nao for igual a 0 quero que passe para ir ver se pode fazer alguma departure
+              pthread_mutex_unlock(&check_eta_mutex);
+              aux = 2;//se o eta nao for igual a 0 quero que passe para ir ver se pode fazer alguma departure
             }
 
         }
-        pthread_mutex_unlock(&flight_type_mutex);
+
 
 
         aux = 0; //reset da variavel aux para poder ser usada com o mesmo proposito nos departure
-        temp = 0; //reset da variavel temp
-        counter = 0;
-
-        //muda o flight type para departure
-        //Assim a thread so e perturbada se o voo que chegar a control tower for departure
 
 
-        pthread_mutex_lock(&flight_type_mutex);
-        while(header_departure -> next != NULL && (aux < 2 || temp == ETIMEDOUT)){
+        while(header_departure -> next != NULL && aux < 2){
 
             departure = header_departure -> next;
 
             if(departure != NULL && compare_time(begin, convert_to_wait(departure -> takeoff, time_unit)) == 1 ){
 
-                if((departure -> next != NULL && compare_time(begin, convert_to_wait(departure -> next -> takeoff, time_unit)) == -1) || departure -> next == NULL){
-                    counter += 1;
+                if( aux == 1 || (departure -> next != NULL && compare_time(begin, convert_to_wait(departure -> next -> takeoff, time_unit)) == -1) || departure -> next == NULL){
 
                     //avisa a thread que pode aterrar
                     if(aux == 0){
@@ -600,20 +599,11 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
                     //retirar o voo do array
                     remove_departure(header_departure, departure);
 
-                    time_to_process = convert_to_wait(takeoff_time + takeoff_delta, time_unit);
-                    //time_for_timedwait = timedwait_time(time_to_process);
-                    time_for_timedwait.tv_sec = time_to_process.secs;
-                    time_for_timedwait.tv_nsec = time_to_process.nsecs;
-
-                    //printf("SLEEP USECS %d takeoff time %d takeoffDelta %d Time unit %d\n", ((takeoff_time + takeoff_delta) * time_unit) * 1000, takeoff_time,takeoff_delta,time_unit);
                     usleep(((takeoff_time + takeoff_delta) * time_unit) * 1000);
-                    //sleep(10);
-                    //nanosleep(&time_for_timedwait,NULL);
-                    //pthread_cond_timedwait(&flight_type_var, &flight_type_mutex, &time_for_timedwait);
+
 
                 }
                 else if(departure -> next != NULL && compare_time(begin, convert_to_wait(departure -> next -> takeoff, time_unit)) == 1){
-                    counter = 2;
 
                     airport -> max_flights[departure -> shared_memory_index] = 2;
                     airport -> max_flights[departure -> next -> shared_memory_index] = 3;
@@ -631,17 +621,8 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
                     remove_departure(header_departure, departure -> next);
                     remove_departure(header_departure, departure);
 
-                    time_to_process = convert_to_wait(takeoff_time + takeoff_delta, time_unit);
-                    //time_for_timedwait = timedwait_time(time_to_process);
-
-                    time_for_timedwait.tv_sec = time_to_process.secs;
-                    time_for_timedwait.tv_nsec = time_to_process.nsecs;
-
-                    //printf("SLEEP USECS %d takeoff time %d takeoffDelta %d Time unit %d\n", ((takeoff_time + takeoff_delta) * time_unit) * 1000, takeoff_time,takeoff_delta,time_unit);
                     usleep(((takeoff_time + takeoff_delta) * time_unit) * 1000);
-                    //sleep(10);
-                    //nanosleep(&time_for_timedwait,NULL);
-                    //pthread_cond_timedwait(&flight_type_var, &flight_type_mutex, &time_for_timedwait);//nao sei se e a melhor approach de fazer a thread esperar, sleep aqui tambem nao ficava mal
+
                 }
             }
             else{
@@ -649,67 +630,70 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
             }
 
         }
-        pthread_mutex_unlock(&flight_type_mutex);
         //reset as variaveis
         aux = 0;
-        temp = 0;
-        counter = 0;
 
     }
+    pthread_mutex_unlock(&is_it_time_mutex);
 }
 
-//funcao que decrementa o eta dos arrivals
-void * decrement_eta(void* arg){
-    int time_unit_in_ns = time_unit * 1000;//time_unit in ms to time_unit in ns for the usleep function
-    struct list_arrival *arrival;
-    struct list_arrival *header_arrival = (struct list_arrival *) arg;
+//funcao que verifica se ha algum voo que pode ser executado e decrementa o eta e o fuel dos voos arrival
+void* check_flights(void *arg){
+    struct lists *temp = (struct lists*) arg;
+  struct lists args =  *temp;
+  struct list_arrival *header_arrival;
+  struct list_departure *header_departure;
+  header_arrival = args.arrival;
+  header_departure = args.departure;
 
-    //printf("STARTED DECREMENT\n");
-    if(header_arrival != NULL){
-        //decrementa o ETA
-        //puts("NOT_NULL");
-        while(header_arrival -> next != NULL || running == 1){
-            if(header_arrival -> next != NULL){
-                arrival = header_arrival -> next;
 
-                while(arrival != NULL){
-                    if(arrival -> eta > 0){
-                        arrival -> eta --;
-                        arrival ->fuel--;
-                        //puts("DECREMENTED SUCCESSFULLY");
-                    }
-                    arrival = arrival->next;
-                }
-                choose_flights_to_hold(header_arrival);
+  int time_unit_in_ns = time_unit * 1000;//time_unit in ms to time_unit in ns for the usleep function
+  struct list_arrival *arrival;
 
-                if(header_arrival -> next -> eta == 0){
-                    //se eu tiver tempo de implementar tudo como deve ser, aqui vai ficar um broadcast para uma variavel de condicao, para avisar que está um voo pronto para ser executado
-                }
-            }
-            usleep(time_unit_in_ns);//espera uma time_unit para decrementar os eta's
+
+
+  if(header_arrival != NULL && header_departure != NULL){
+    //decrementa o ETA
+    while(header_arrival -> next != NULL || header_departure != NULL || airport->stop_condition == 1){
+      if(header_arrival -> next != NULL){
+        arrival = header_arrival -> next;
+
+        //decrementa o eta em exclusao mutua
+        pthread_mutex_lock(&check_eta_mutex);
+        while(arrival != NULL){
+          if(arrival -> eta > 0){
+            arrival -> eta --;
+          }
+
+          arrival = arrival ->  next;
         }
+        pthread_mutex_unlock(&check_eta_mutex);
+
+        //se houverem mais do que 5 voos com eta = 0, os 5+ com eta = 0 sao redirecionados, os outros fazem holding
+        choose_flights_to_hold(header_arrival);
+        if(header_arrival -> next -> eta == 0){
+          //############
+          //para avisar a torre de controlo que ha pelo menos um voo que pode ser executado
+            pthread_cond_broadcast(&is_it_time_var);
+
+          }
+          //##########
+        }
+
+        if(header_departure -> next != NULL){
+
+          if(compare_time(begin, convert_to_wait(header_departure -> next -> takeoff, time_unit)) == 1){//se for tempo para executar o primeiro departure, entao a control tower e sinalizada
+              pthread_cond_broadcast(&is_it_time_var);
+          }
+
+        }
+
+
+        usleep(time_unit_in_ns);//espera uma time_unit para decrementar os eta's
     }
-    pthread_exit(NULL);
+  }
 
-}
-
-//retorna o momento absoluto ate quando a thread deve esperar (struct timespec)
-//recebe o landing time e intervalo de landing ou o takeoff time e o intervalo de takeoff em sec + nsec
-struct timespec timedwait_time(struct wt time_given){
-    struct timespec now_time;
-    struct timespec time_to_wait;
-    clock_gettime(CLOCK_REALTIME, &now_time);
-
-    time_to_wait.tv_sec = now_time.tv_sec;
-    time_to_wait.tv_nsec = now_time.tv_nsec;
-
-    if(now_time.tv_nsec + time_given.nsecs > 1000000000 ){
-        time_to_wait.tv_sec += 1;
-        time_to_wait.tv_nsec = (now_time.tv_nsec + time_given.nsecs) % 1000000000;
-    }
-    time_to_wait.tv_sec += time_given.secs;
-
-    return time_to_wait;
+  pthread_exit(NULL);//ter de ser feito join <<<-- alterado
 }
 
 
@@ -756,4 +740,3 @@ void print_departures(){
 
 
 };
-

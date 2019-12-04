@@ -18,8 +18,11 @@ extern shared_mem *airport;
 
 struct list_arrival *arrival_list;
 struct list_departure *departure_list;
-pthread_cond_t flight_type_var;
-pthread_mutex_t flight_type_mutex;
+struct lists arguments;//<<<-- alterado
+pthread_mutex_t check_eta_mutex = PTHREAD_MUTEX_INITIALIZER;//<<<-- alterado
+pthread_mutex_t is_it_time_mutex = PTHREAD_MUTEX_INITIALIZER;//<<<-- alterado
+pthread_cond_t is_it_time_var = PTHREAD_COND_INITIALIZER;//<<<-- alterado
+
 struct list_arrival{
     int priority;//0-EMERGENCY 1-NORMAL
     int eta;
@@ -36,9 +39,15 @@ struct list_departure{
     struct list_departure *next;
 };
 
+//Struct used to pass the pointers to the departure and arrival lists to the thread that runs chexk_flights
+struct lists{//<<<-- alterado
+  struct list_arrival *arrival;
+  struct list_departure *departure;
+};
+
+
 void control_tower();
 struct CT_info* create_ct_info();
-void fuel_decrement(void* arg);
 void add_ct_info(struct CT_info* node, struct CT_info* head);
 void *get_messages(void *arg);
 int index_shm();
@@ -54,9 +63,8 @@ struct list_departure* create_node_departure(struct CT_info *information);
 void add_departure(struct list_departure *header, struct list_departure *node);
 void remove_departure(struct list_departure *header, struct list_departure *node);
 void choose_flights_to_work(struct list_arrival *header_arrival, struct list_departure *header_departure);
-void *decrement_eta(void* arg);
+void *check_flights(void* arg);//<<<-- alterado
 struct list_departure* create_departure_list();
-struct timespec timedwait_time(struct wt time_given);
 int compare_time(struct timespec begin, struct wt takeoff);
 void print_arrivals();
 void print_departures();
