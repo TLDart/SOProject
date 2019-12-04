@@ -537,7 +537,7 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
                   //retira o voo do array
                   remove_arrival(header_arrival, arrival);
 
-                  usleep(((takeoff_time + takeoff_delta) * time_unit) * 1000);
+                    usleep(((landing_time + landing_delta) * time_unit) * 1000);
 
                 }
                 else if(arrival -> next != NULL && arrival -> next -> eta == 0){//executa dois da lista de arrivals
@@ -557,7 +557,7 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
                   remove_arrival(header_arrival, arrival -> next);
                   remove_arrival(header_arrival, arrival);
 
-                  usleep(((takeoff_time + takeoff_delta) * time_unit) * 1000);
+                  usleep(((landing_time + landing_delta) * time_unit) * 1000);
 
                 }
 
