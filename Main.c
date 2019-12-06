@@ -74,7 +74,7 @@ void simulation_manager(char *config_path) {
     /*Create Control Tower*/
 
     printf(" _>>>takeoff time %d takeoffDelta %d Time unit %d min_hold %d\n", takeoff_time,takeoff_delta,time_unit, min_hold);
-    //printf(" _>>>%d takeoffDelta %d Time unit %d\n", takeoff_time,takeoff_delta,time_unit);
+    //printf(">>>%d takeoffDelta %d Time unit %d\n", takeoff_time,takeoff_delta,time_unit);
 
 
     if (fork() == 0) {
@@ -110,7 +110,7 @@ void simulation_manager(char *config_path) {
     shmdt(airport);
     shmctl(shmid, IPC_RMID, 0);
     unlink(PIPE_NAME);
-    msgctl(shmid,IPC_RMID,0);
+    msgctl(mq_id,IPC_RMID,0);
     puts("XAU LAURA");
     exit(0);
 }
@@ -383,7 +383,7 @@ void get_message_from_pipe(int file_d) {
         /*Create the message*/
         msg.msgtype = MSGTYPE_DEFAULT;
         msg.mode = 0;
-        msg.fuel = -1;//Departing planes have no fuel
+        msg.fuel = -1;//Departing planes has no fuel
         msg.time_to_track = data->node->takeoff;
         msg.id = data->id;
 
@@ -393,6 +393,8 @@ void get_message_from_pipe(int file_d) {
             perror("SENDING MESSAGE ERROR");
             exit(-1);
         }
+        printf("%s-------------[THREAD][MSG SENT SUCESSFULLY][ID] %d %s\n", WHITE,msg.id, RESET);
+
         if (msgrcv(mq_id, &temp, sizeof(temp) - sizeof(long), msg.id, 0) == -1) {/*Reads the message from the control Tower*/
             perror("RECEIVING MESSAGE ERROR");
             exit(-1);
@@ -495,6 +497,7 @@ void get_message_from_pipe(int file_d) {
             perror("ERROR SENDING MESSAGE");
             exit(-1);
         }
+        printf("%s-------------[THREAD][MSG SENT SUCESSFULLY][ID] %d %s\n", WHITE,msg.id, RESET);
 
         if (msgrcv(mq_id, &temp, sizeof(temp) - sizeof(long), msg.id, 0) == -1) {/*Receives message from control tower*/
             perror("ERROR RECEIVING MESSAGE");

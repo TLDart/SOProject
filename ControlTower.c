@@ -17,16 +17,16 @@ void control_tower() {
     arguments.arrival = arrival_list;//<<<--alterado
     arguments.departure = departure_list;
     pthread_t msg_reader, check_f;//<<<<-- alterado
-    puts("CONTROL TOWER CREATED");
+    printf("CONTROL TOWER CREATED\n");
     // Insert Control Tower Code
     pthread_create(&msg_reader, NULL, get_messages, NULL);
     pthread_create(&check_f, NULL, check_flights,&arguments);//<<<-- alterado
     choose_flights_to_work(arrival_list,departure_list);
-    puts("ENDED CHOOSE FLIGHTS");
+    printf("ENDED CHOOSE FLIGHTS\n");
     pthread_join(msg_reader, NULL);
-    puts("ENDED MSG READER");
+    printf("ENDED MSG READER\n");
     pthread_join(check_f, NULL);
-    puts("ENDED CHECK FLIGHTS");
+    printf("ENDED CHECK FLIGHTS\n");
 
 
 }
@@ -96,7 +96,8 @@ void *get_messages(void *arg){
     printf("[CONTROL TOWER NOW RECEIVING MESSAGES]\n");
 
     while(running) {//Reads messages until it receives a termination condition
-        if (msgrcv(mq_id, &aux, sizeof(aux) - sizeof(long), -MSGTYPE_EXIT, 0) == -1) {
+        printf("%s ----------------------RUNNING\n%s", WHITE, RESET);
+        if ((msgrcv(mq_id, &aux, sizeof(aux) - sizeof(long), -MSGTYPE_EXIT, 0) ) < 0) {
             printf("ERROR RECEIVING MSQ MSG\n");
         }
         /*if(showStats == 1)*/ printf("%s -->>[CT][RECEIVED MSG SUCCESSFULLY][ID] %d [MODE] %d%s\n", CYAN, aux.id,
@@ -122,16 +123,15 @@ void *get_messages(void *arg){
                 if (aux.mode == 1) {//Arrival type flight
                     add_arrival(arrival_list, create_node_arrival(element));
                     airport->flights_arrived++;
-                    print_arrivals();
+                    //print_arrivals();
                     if (showVerbose == 1) printf("ADDED TO ARRIVAL LIST\n");
                 } else if (aux.mode == 0) {//Departure type flight
                     add_departure(departure_list, create_node_departure(element));
                     airport->flights_arrived++;
-                    print_departures();
+                    //print_departures();
                     if (showVerbose == 1) printf("ADDED TO DEPARTURE LIST\n");
-                } else if (aux.mode == -1) {
-                    running = 0;// -1 means that it receives order to terminate the program
-                } else { puts("ERROR ADDING FLIGHT TO ARRIVAL/DEPARTURE ARRAY"); }
+                }
+                else { puts("ERROR ADDING FLIGHT TO ARRIVAL/DEPARTURE ARRAY"); }
 
                 //Reply to the thread with the correct shared memory position
                 info.msgtype = aux.id;//Select the correct thread ID
@@ -143,12 +143,17 @@ void *get_messages(void *arg){
                 info.position = -1;
                 airport->rejected_flights++;
             }
+
             if (msgsnd(mq_id, &info, sizeof(info) - sizeof(long), 0) == -1) { /*Fill the position in the shared memory*/
                 puts("ERROR SENDING MESSAGE (CT)");
             }
             /*if(showStats == 1)*/ printf("%s -->>[CT][SENT MSG SUCCESSFULLY][ID] %ld [POS] %d%s\n", CYAN, info.msgtype,
                                           info.position, RESET);
+            printf("%s ----------------------ENDING\n%s", WHITE, RESET);
+
         }
+        printf("%s ----------------------ENDING\n%s", WHITE, RESET);
+
     }
 
     if(showVerbose == 1) printf("%s [CT] Get messages thread ended %s", RED,RESET);
@@ -506,21 +511,21 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
 
     while(header_arrival -> next != NULL || header_departure -> next != NULL || running == 1){ //condition e a tal variavel que e alterada para dizer a control tower que o programa vai acabar
 
-      ////////////            fazer wait pelo signal da thread que decrementa o eta e verifica o takeoff
-      ///////////             colocar dentro de um if, ou seja so fica a espera se o eta do voo a seguir for diferente de 0 e o takeoff do voo for diferente do momento atual (usar a funcao compare_time)
-      //////////              fazer isto em exclusao mutua, pois a decrementa_eta vai estar a alterar os valores que estao a ser acedidos aqui
-      /////////               de qualquer forma, se ficar parado num mutex, nao e espera ativa, entao OK
+        ////////////            fazer wait pelo signal da thread que decrementa o eta e verifica o takeoff
+        ///////////             colocar dentro de um if, ou seja so fica a espera se o eta do voo a seguir for diferente de 0 e o takeoff do voo for diferente do momento atual (usar a funcao compare_time)
+        //////////              fazer isto em exclusao mutua, pois a decrementa_eta vai estar a alterar os valores que estao a ser acedidos aqui
+        /////////               de qualquer forma, se ficar parado num mutex, nao e espera ativa, entao OK
 
         //puts("-±±±±±±±±±±±ENTERS LOOP");
-      pthread_mutex_lock(&check_eta_mutex);
-      if(  (header_arrival -> next == NULL && header_departure -> next == NULL) ||  (header_arrival -> next == NULL && compare_time(begin, convert_to_wait(header_departure -> next -> takeoff, time_unit)) == -1)  ||  (header_departure -> next == NULL && header_arrival -> next -> eta != 0 )   ||  (header_arrival -> next -> eta != 0 && compare_time(begin, convert_to_wait(header_departure -> next -> takeoff, time_unit)) == -1)     ){
-          //puts("-±±±±±±±±±±±VAR1");
-          pthread_mutex_unlock(&check_eta_mutex);
-        pthread_cond_wait(&is_it_time_var, &is_it_time_mutex);//tem de ser criada esta variavel de condicao
-      }
-      else{
-        pthread_mutex_unlock(&check_eta_mutex);
-      }
+        pthread_mutex_lock(&check_eta_mutex);
+        if(  (header_arrival -> next == NULL && header_departure -> next == NULL) ||  (header_arrival -> next == NULL && compare_time(begin, convert_to_wait(header_departure -> next -> takeoff, time_unit)) == -1)  ||  (header_departure -> next == NULL && header_arrival -> next -> eta != 0 )   ||  (header_arrival -> next -> eta != 0 && compare_time(begin, convert_to_wait(header_departure -> next -> takeoff, time_unit)) == -1)     ){
+            //puts("-±±±±±±±±±±±VAR1");
+            pthread_mutex_unlock(&check_eta_mutex);
+            pthread_cond_wait(&is_it_time_var, &is_it_time_mutex);//tem de ser criada esta variavel de condicao
+        }
+        else{
+            pthread_mutex_unlock(&check_eta_mutex);
+        }
 
         //puts("-±±±±±±±±±±±SKIPS  CONDITION");
         while(header_arrival -> next != NULL && aux < 2 ){
@@ -532,50 +537,50 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
             if(arrival != NULL && arrival -> eta == 0){
 
                 if( aux == 1 || (arrival -> next != NULL && arrival -> next -> eta != 0) || arrival -> next == NULL){//executa apenas um da lista de arrivals
-                  pthread_mutex_unlock(&check_eta_mutex);
+                    pthread_mutex_unlock(&check_eta_mutex);
 
-                  //manda o voo aterrar
-                  if(aux == 0){
-                      airport -> max_flights[arrival -> shared_memory_index] = 5;//diz qual e a pista a utilizar pelo voo
-                  }
-                  else if(aux == 1){
-                      airport -> max_flights[arrival -> shared_memory_index] = 6;
-                  }
-                  airport->total_landed++;
-                  pthread_cond_broadcast(&airport->command_var);
+                    //manda o voo aterrar
+                    if(aux == 0){
+                        airport -> max_flights[arrival -> shared_memory_index] = 5;//diz qual e a pista a utilizar pelo voo
+                    }
+                    else if(aux == 1){
+                        airport -> max_flights[arrival -> shared_memory_index] = 6;
+                    }
+                    airport->total_landed++;
+                    pthread_cond_broadcast(&airport->command_var);
 
-                  aux ++;
-                  //retira o voo do array
-                  remove_arrival(header_arrival, arrival);
+                    aux ++;
+                    //retira o voo do array
+                    remove_arrival(header_arrival, arrival);
 
                     usleep(((landing_time + landing_delta) * time_unit) * 1000);
 
                 }
                 else if(arrival -> next != NULL && arrival -> next -> eta == 0){//executa dois da lista de arrivals
-                  pthread_mutex_unlock(&check_eta_mutex);
+                    pthread_mutex_unlock(&check_eta_mutex);
 
-                  //manda o voo aterrar
+                    //manda o voo aterrar
 
-                  airport -> max_flights[arrival -> shared_memory_index] = 5;//diz qual e a pista a utilizar pelo voo
+                    airport -> max_flights[arrival -> shared_memory_index] = 5;//diz qual e a pista a utilizar pelo voo
 
-                  airport -> max_flights[arrival -> next -> shared_memory_index] = 6;
+                    airport -> max_flights[arrival -> next -> shared_memory_index] = 6;
 
-                  pthread_cond_broadcast(&airport->command_var);
+                    pthread_cond_broadcast(&airport->command_var);
 
-                  airport->total_landed +=2;
-                  aux = 2;
-                  //retira o voo do array
-                  remove_arrival(header_arrival, arrival -> next);
-                  remove_arrival(header_arrival, arrival);
+                    airport->total_landed +=2;
+                    aux = 2;
+                    //retira o voo do array
+                    remove_arrival(header_arrival, arrival -> next);
+                    remove_arrival(header_arrival, arrival);
 
-                  usleep(((landing_time + landing_delta) * time_unit) * 1000);
+                    usleep(((landing_time + landing_delta) * time_unit) * 1000);
 
                 }
 
             }
             else{
-              pthread_mutex_unlock(&check_eta_mutex);
-              aux = 2;//se o eta nao for igual a 0 quero que passe para ir ver se pode fazer alguma departure
+                pthread_mutex_unlock(&check_eta_mutex);
+                aux = 2;//se o eta nao for igual a 0 quero que passe para ir ver se pode fazer alguma departure
             }
 
         }
@@ -651,60 +656,60 @@ void choose_flights_to_work(struct list_arrival *header_arrival, struct list_dep
 //funcao que verifica se ha algum voo que pode ser executado e decrementa o eta e o fuel dos voos arrival
 void* check_flights(void *arg){
     struct lists *temp = (struct lists*) arg;
-  struct lists args =  *temp;
-  struct list_arrival *header_arrival;
-  struct list_departure *header_departure;
-  header_arrival = args.arrival;
-  header_departure = args.departure;
+    struct lists args =  *temp;
+    struct list_arrival *header_arrival;
+    struct list_departure *header_departure;
+    header_arrival = args.arrival;
+    header_departure = args.departure;
 
 
-  int time_unit_in_ns = time_unit * 1000;//time_unit in ms to time_unit in ns for the usleep function
-  struct list_arrival *arrival;
+    int time_unit_in_ns = time_unit * 1000;//time_unit in ms to time_unit in ns for the usleep function
+    struct list_arrival *arrival;
 
 
 
-  if(header_arrival != NULL && header_departure != NULL){
-    //decrementa o ETA
-    while(header_arrival -> next != NULL || header_departure->next != NULL || running == 1){
-      if(header_arrival -> next != NULL){
-        arrival = header_arrival -> next;
+    if(header_arrival != NULL && header_departure != NULL){
+        //decrementa o ETA
+        while(header_arrival -> next != NULL || header_departure->next != NULL || running == 1){
+            if(header_arrival -> next != NULL){
+                arrival = header_arrival -> next;
 
-        //decrementa o eta em exclusao mutua
-        pthread_mutex_lock(&check_eta_mutex);
-        while(arrival != NULL){
-          if(arrival -> eta > 0){
-            arrival -> eta --;
-          }
+                //decrementa o eta em exclusao mutua
+                pthread_mutex_lock(&check_eta_mutex);
+                while(arrival != NULL){
+                    if(arrival -> eta > 0){
+                        arrival -> eta --;
+                    }
 
-          arrival = arrival ->  next;
+                    arrival = arrival ->  next;
+                }
+                pthread_mutex_unlock(&check_eta_mutex);
+
+                //se houverem mais do que 5 voos com eta = 0, os 5+ com eta = 0 sao redirecionados, os outros fazem holding
+                choose_flights_to_hold(header_arrival);
+                if(header_arrival -> next -> eta == 0){
+                    //############
+                    //para avisar a torre de controlo que ha pelo menos um voo que pode ser executado
+                    pthread_cond_broadcast(&is_it_time_var);
+
+                }
+                //##########
+            }
+
+            if(header_departure -> next != NULL){
+
+                if(compare_time(begin, convert_to_wait(header_departure -> next -> takeoff, time_unit)) == 1){//se for tempo para executar o primeiro departure, entao a control tower e sinalizada
+                    pthread_cond_broadcast(&is_it_time_var);
+                }
+
+            }
+
+
+            usleep(time_unit_in_ns);//espera uma time_unit para decrementar os eta's
         }
-        pthread_mutex_unlock(&check_eta_mutex);
-
-        //se houverem mais do que 5 voos com eta = 0, os 5+ com eta = 0 sao redirecionados, os outros fazem holding
-        choose_flights_to_hold(header_arrival);
-        if(header_arrival -> next -> eta == 0){
-          //############
-          //para avisar a torre de controlo que ha pelo menos um voo que pode ser executado
-            pthread_cond_broadcast(&is_it_time_var);
-
-          }
-          //##########
-        }
-
-        if(header_departure -> next != NULL){
-
-          if(compare_time(begin, convert_to_wait(header_departure -> next -> takeoff, time_unit)) == 1){//se for tempo para executar o primeiro departure, entao a control tower e sinalizada
-              pthread_cond_broadcast(&is_it_time_var);
-          }
-
-        }
-
-
-        usleep(time_unit_in_ns);//espera uma time_unit para decrementar os eta's
     }
-  }
-  pthread_cond_broadcast(&is_it_time_var);
-  pthread_exit(NULL);//ter de ser feito join <<<-- alterado
+    pthread_cond_broadcast(&is_it_time_var);
+    pthread_exit(NULL);//ter de ser feito join <<<-- alterado
 }
 
 
