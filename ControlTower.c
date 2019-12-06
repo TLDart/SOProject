@@ -9,8 +9,11 @@ void control_tower(){
     header_departure = create_departure_list();
     header_arrival = create_arrival_list();
 
-    can_hold = sem_open(CAN_SEND,O_CREAT | O_EXCL,0700,0);
+    can_send = sem_open(CAN_SEND,O_CREAT | O_EXCL,0700,0);
     pthread_create(&messenger,NULL, get_messages, NULL);
+
+    flight_handler();
+
     pthread_join(messenger,NULL);
 }
 
@@ -40,12 +43,15 @@ void *get_messages(void *arg) {
             else{
                 pthread_mutex_lock(&flight_verifier);
                 msg_sent.position = index_shm(); // Finds an available index the shared_mem
+                pthread_mutex_unlock(&flight_verifier);
                 new_message = 1;
                 pthread_cond_broadcast(&awake_holder); // Broadcasts to awake the thread
-                //sem_wait(can_send);
+                pthread_mutex_unlock(&flight_verifier);
+                sem_wait(can_send); //waits for the flight handler to put the node on the list
                 add_arrival(header_arrival, create_node_arrival(&msg_rcv, msg_sent.position));
                 header_arrival ->number_of_nodes++;
-                //sem_post(can_hold);
+                sem_post(can_hold); //Says to the flight holder that it can hold
+                pthread_mutex_lock(&flight_verifier);
                 new_message = 0;
                 pthread_mutex_unlock(&flight_verifier);
             }
@@ -58,13 +64,16 @@ void *get_messages(void *arg) {
                 msg_sent.position = -1;
             }
             else{
-                pthread_mutex_lock(&flight_verifier);
                 msg_sent.position = index_shm();
+                pthread_mutex_lock(&flight_verifier);
                 new_message = 1;
-                //sem_wait(can_send);
+                pthread_cond_broadcast(&awake_holder); // Broadcasts to awake the thread
+                pthread_mutex_unlock(&flight_verifier);
+                sem_wait(can_send);
                 add_to_departure(header_departure, create_node_departure(&msg_rcv, msg_sent.position));
-                header_departure ->number_of_nodes++;
-                //sem_post(can_hold);
+                header_departure -> number_of_nodes++;
+                sem_post(can_hold);
+                pthread_mutex_lock(&flight_verifier);
                 new_message = 0;
                 pthread_mutex_unlock(&flight_verifier);
 
@@ -74,14 +83,13 @@ void *get_messages(void *arg) {
         //Send the message
         msg_sent.msgtype = msg_rcv.id;
 
-            if(msg_sent.position == -1){
-                printf("HERE\n");
-            }
+        if(msg_sent.position == -1){
+            printf("HERE\n");
+        }
         if(msgsnd(mq_id, &msg_sent, sizeof(struct sharedmem_info)- sizeof(long), 0) < 0){
             printf("Error sending the messsage\n");//TODO MIGHT be a problem here
 
         }
-
     }
     pthread_exit(NULL);
 }
@@ -98,9 +106,25 @@ int index_shm(){
 }
 
 void flight_handler(){
+    /* This will hopefully handle the flights
+     *
+     * */
 
+    while(runningCT == 1 || header_departure != 0 || header_arrival !=0){
+        pthread_mutex_lock(&flight_verifier);
+        if(new_message == 1){
+            pthread_mutex_unlock(&flight_verifier);
+            sem_post(can_send);
+            printf("PODE ADICIONAR\n");
+            sem_wait(can_hold);
+            printf("PODE CONTINUAR\n");
 
+        }
+        else{
+            pthread_mutex_unlock(&flight_verifier);
+        }
 
+    }
 
 }
 struct list_arrival *create_arrival_list(){
