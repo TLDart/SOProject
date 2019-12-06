@@ -13,6 +13,22 @@
 #define  CAN_SEND "CAN_SEND"
 #define  CAN_HOLD "CAN_HOLD"
 
+struct list_arrival{
+    int priority;//0-EMERGENCY 1-NORMAL
+    int eta;
+    int fuel;
+    int shared_memory_index; //Saves the shared memory corresponding iD
+    int number_of_nodes;
+
+    struct list_arrival *next;
+};
+
+struct list_departure{
+    int takeoff;
+    int shared_memory_index;
+    int number_of_nodes;
+    struct list_departure *next;
+};
 
 extern int mq_id, max_landings, max_takeoffs;
 extern shared_mem *airport;
@@ -22,9 +38,11 @@ int runningCT = 1,
         counter_dep = 0,// at the same time
         new_message = 0;
 
-
+struct list_departure *header_departure;
+struct list_arrival *header_arrival;
 pthread_t messenger;
 pthread_mutex_t flight_verifier = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t awake_holder = PTHREAD_COND_INITIALIZER;
 
 sem_t *can_send,
       *can_hold;
@@ -34,3 +52,13 @@ sem_t *can_send,
 void control_tower();
 void *get_messages(void *arg);
 int index_shm();
+void flight_handler();
+struct list_arrival *create_arrival_list();
+struct list_arrival *create_node_arrival(struct message *information, int position);
+void add_arrival(struct list_arrival *header, struct list_arrival *node);
+struct list_arrival *pop_arrival(struct list_arrival *header, struct list_arrival *node);
+void remove_arrival(struct list_arrival *header, struct list_arrival *node);
+struct list_departure* create_departure_list();
+struct list_departure* create_node_departure(struct message* information, int position);
+void add_to_departure(struct list_departure *header, struct list_departure * node);
+void remove_departure(struct list_departure *header, struct list_departure *node);
