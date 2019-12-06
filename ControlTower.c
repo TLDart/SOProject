@@ -171,27 +171,49 @@ void flight_handler(){
         /*Choose flight to work)*/
         if(counter % 2 == 0){
             if (header_arrival->number_of_nodes > 0) {
+                if(header_arrival->number_of_nodes > 1){
+                    if (compare_time(begin, convert_to_wait(header_arrival->next->next->eta, time_unit)) == 1) {// If it is time to shedule the flight
+                        airport->max_flights[header_arrival->next->next->shared_memory_index] = 5;
+                        //pthread_cond_broadcast(&airport->command_var);
+                        header_arrival->number_of_nodes--;
+                        if(header_arrival->next->next->priority == 1) airport->total_emergency++;
+                        airport->total_landed++;
+                        remove_arrival(header_arrival, header_arrival->next->next);
+                    }
+                }
+
                 if (compare_time(begin, convert_to_wait(header_arrival->next->eta, time_unit)) == 1) {// If it is time to shedule the flight
                     airport->max_flights[header_arrival->next->shared_memory_index] = 5;
                     pthread_cond_broadcast(&airport->command_var);
                     header_arrival->number_of_nodes--;
                     airport->total_landed++;
+                    if(header_arrival->next->priority == 1) airport->total_emergency++;
                     remove_arrival(header_arrival,header_arrival->next);
                     sleeptime = landing_time + landing_delta;
-                    usleep(sleeptime * 1000);
+                    usleep(sleeptime * 1000 * time_unit);
                 }
             }
         }
         else{
             if(header_departure->number_of_nodes > 0){
-                if (compare_time(begin, convert_to_wait(header_departure->next->takeoff, time_unit)) == 1) {// If it is time to shedule the flight
-                    airport->max_flights[header_departure->next->shared_memory_index] = 2;
+                if(header_departure->number_of_nodes > 1) {
+                    if (compare_time(begin, convert_to_wait(header_departure->next->next->takeoff, time_unit)) ==
+                        1) {// If it is time to shedule the flight
+                        airport->max_flights[header_departure->next->next->shared_memory_index] = 3; //Depart on R1
+                        //pthread_cond_broadcast(&airport->command_var);
+                        header_departure->number_of_nodes--;
+                        airport->total_takeoff++;
+                        remove_departure(header_departure, header_departure->next->next);
+                    }
+                }
+                if(compare_time(begin, convert_to_wait(header_departure->next->takeoff, time_unit)) == 1) {// If it is time to shedule the flight
+                    airport->max_flights[header_departure->next->shared_memory_index] = 2; //Depart on R2
                     pthread_cond_broadcast(&airport->command_var);
                     header_departure->number_of_nodes--;
                     airport->total_takeoff++;
                     remove_departure(header_departure,header_departure->next);
                     sleeptime = takeoff_time + takeoff_delta;
-                    usleep(sleeptime * 1000);
+                    usleep(sleeptime * 1000 * time_unit);
 
                 }
             }
@@ -223,7 +245,7 @@ int compare_time(struct timespec begin, struct wt takeoff){
     }
     temp.tv_sec += takeoff.secs;
 
-    if(now.tv_sec >= temp.tv_sec && now.tv_nsec >= temp.tv_nsec){
+    if(now.tv_sec >= temp.tv_sec){
         return 1;
     }
     else{
