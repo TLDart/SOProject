@@ -1,758 +1,92 @@
 #include "ControlTower.h"
 
 
-void control_tower() {
-    /* Handles Flight Threads, shared memory communication, and Message Queue Messaging
-     *
-     */
-    signal(SIGINT, SIG_IGN); /*Ignore SIGINT*/
-    signal(SIGUSR1, showStatistics);   /*Handle Signals*/
+void control_tower(){
+    sem_unlink(CAN_HOLD);
+    can_hold = sem_open(CAN_HOLD,O_CREAT| O_EXCL,0700,0);
+    sem_unlink(CAN_SEND);
 
-    printf(("PID %d\n"), getpid()); // TODO CORRECT RUNNING CONDITION
-
-    arrival_list = create_arrival_list();
-    departure_list = create_departure_list();
-
-
-    arguments.arrival = arrival_list;//<<<--alterado
-    arguments.departure = departure_list;
-    pthread_t msg_reader, check_f;//<<<<-- alterado
-    printf("CONTROL TOWER CREATED\n");
-    // Insert Control Tower Code
-    pthread_create(&msg_reader, NULL, get_messages, NULL);
-    pthread_create(&check_f, NULL, check_flights,&arguments);//<<<-- alterado
-    choose_flights_to_work(arrival_list,departure_list);
-    printf("ENDED CHOOSE FLIGHTS\n");
-    pthread_join(msg_reader, NULL);
-    printf("ENDED MSG READER\n");
-    pthread_join(check_f, NULL);
-    printf("ENDED CHECK FLIGHTS\n");
-
-
+    can_hold = sem_open(CAN_SEND,O_CREAT | O_EXCL,0700,0);
+    pthread_create(&messenger,NULL, get_messages, NULL);
+    pthread_join(messenger,NULL);
 }
 
-void showStatistics(int signum) {
-    /* Prints the stats to stdout, TU refers to time_units
-     *
-     * Parameters:
-     *      signum = signal number
-     */
-    signal(SIGUSR1, showStatistics);
-    printf("Total number of flights : %d\n", airport->total_flights);
-    printf("Total flights that Landed: %d\n", airport->total_landed);
-    printf("Average Landing ETA: %.2lf TU\n ", (airport->total_time_landing * 1.0) / airport->total_landed);
-    printf("Total Flights that TookOff: %d\n", airport->total_takeoff);
-    printf("Average Takeoff Time : %.2lf TU\n ", (airport->total_time_takeoff * 1.0) / airport->total_takeoff);
-    printf("Average number of holding maneuvers per Regular Flight : %lf\n", (airport->total_holding_man *1.0) / (airport->total_landed));
-    if(airport->total_emergency != 0){
-        printf("Average number of maneuvers per Emergency Flight : %lf\n", (airport->total_emergency_holding_man *1.0) / (airport->total_emergency));
-    }
-    else{
-        printf("Average number of maneuvers per Emergency Flight : 0\n");
-    }
-    printf("Total redirected flights : %d\n", airport->redirected_flights);
-    printf("Total rejected flights : %d\n", airport->rejected_flights);
-}
 
-struct CT_info* create_ct_info(){
-    /* Creates a linked list with header
-     *
-     * Returns:
-     *      Return an element of type message_array with default elements and NULL values, this will be the head
-     */
-    struct CT_info* head = (struct CT_info*) malloc(sizeof(struct CT_info));
-    head->fuel = -1;
-    head->time_to_track = -1;
-    head->id = -1;
-    head->pos = -1;
-    return head;
-
-}
-
-void add_ct_info(struct CT_info* node, struct CT_info* head) {
-    /* Adds message_array type element to the  end of the list
-     *
-     * Parameters:
-     *      node - p_node type element that we want to add to our list
-     *      head - specifies the head of a message type list
-     */
-    while(head->next != NULL){
-        head = head->next;
-    }
-    head->next = node;
-}
-
-void *get_messages(void *arg){
+void *get_messages(void *arg) {
     /*  Thread Function that process messages from the incoming message queue.
      * It both reads the message as well as it searches for an available spot in the array, and finally sends a message to the thread with that info;
     *
     */
+    struct message msg_rcv;
+    struct sharedmem_info msg_sent;
 
-    struct message aux;
-    struct CT_info* element;
-    struct sharedmem_info info;
-    int pos, counter_departs = 0, counter_arriv = 0;
-
-    printf("[CONTROL TOWER NOW RECEIVING MESSAGES]\n");
-
-    while(running) {//Reads messages until it receives a termination condition
-        printf("%s ----------------------RUNNING\n%s", WHITE, RESET);
-        if ((msgrcv(mq_id, &aux, sizeof(aux) - sizeof(long), -MSGTYPE_EXIT, 0) ) < 0) {
-            printf("ERROR RECEIVING MSQ MSG\n");
+    while(runningCT){
+        if(msgrcv(mq_id, &msg_rcv, sizeof(struct message)- sizeof(long), -MSGTYPE_EXIT,0) < 0){
+            printf("There as an error sending the message");
         }
-        /*if(showStats == 1)*/ printf("%s -->>[CT][RECEIVED MSG SUCCESSFULLY][ID] %d [MODE] %d%s\n", CYAN, aux.id,
-                                      aux.mode, RESET);
+        printf("Message Received\n");
+        //If the message was received
+        new_message = 1;
 
-        if(aux.id == -1){
-            printf("%s GOT CLOSING MESSAGE%s", RED,RESET);
-            running = 0;
+        //Verify if the flight can't received
+        if(msg_rcv.mode == 1) { //Arrival
+            if(counter_arr == max_landings){//Flight rejected
+                airport->rejected_flights++; //Increment stats
+                msg_sent.position = -1;
+            }
+            else{
+                pthread_mutex_lock(&flight_verifier);
+                msg_sent.position = index_shm(); // Finds an available index the shared_mem
+                new_message = 1;
+                //sem_wait(can_send);
+                //add_to_arrival(&msg_rcv);
+                //sem_post(can_hold);
+                new_message = 0;
+                pthread_mutex_unlock(&flight_verifier);
+            }
+
         }
-        else {
-            element = (struct CT_info *) malloc(sizeof(struct CT_info));//Used to store the message received by the threads;
-            element->fuel = aux.fuel;//Departing planes have no fuel
-            element->time_to_track = aux.time_to_track;
-            element->id = aux.id;
-            element->next = NULL;
+        else if(msg_rcv.mode == 0){// Departure
 
-            if ((aux.mode == 1 && counter_arriv != max_landings) ||
-                (aux.mode == 0 && counter_departs != max_takeoffs)) {
-                if ((pos = index_shm()) != -1) {
-                    element->pos = pos;
-                }
-
-                if (aux.mode == 1) {//Arrival type flight
-                    add_arrival(arrival_list, create_node_arrival(element));
-                    airport->flights_arrived++;
-                    //print_arrivals();
-                    if (showVerbose == 1) printf("ADDED TO ARRIVAL LIST\n");
-                } else if (aux.mode == 0) {//Departure type flight
-                    add_departure(departure_list, create_node_departure(element));
-                    airport->flights_arrived++;
-                    //print_departures();
-                    if (showVerbose == 1) printf("ADDED TO DEPARTURE LIST\n");
-                }
-                else { puts("ERROR ADDING FLIGHT TO ARRIVAL/DEPARTURE ARRAY"); }
-
-                //Reply to the thread with the correct shared memory position
-                info.msgtype = aux.id;//Select the correct thread ID
-                info.position = pos;
-                airport->max_flights[element->pos] = 1;
-
-            } else {
-                info.msgtype = aux.id; //Covers the case where there is not enough space
-                info.position = -1;
+            if(counter_dep == max_takeoffs){
                 airport->rejected_flights++;
+                msg_sent.position = -1;
             }
+            else{
+                pthread_mutex_lock(&flight_verifier);
+                msg_sent.position = index_shm();
+                new_message = 1;
+                //sem_wait(can_send);
+                //add_to_departure(&msg_rcv);
+                //sem_post(can_hold);
+                new_message = 0;
+                pthread_mutex_unlock(&flight_verifier);
 
-            if (msgsnd(mq_id, &info, sizeof(info) - sizeof(long), 0) == -1) { /*Fill the position in the shared memory*/
-                puts("ERROR SENDING MESSAGE (CT)");
             }
-            /*if(showStats == 1)*/ printf("%s -->>[CT][SENT MSG SUCCESSFULLY][ID] %ld [POS] %d%s\n", CYAN, info.msgtype,
-                                          info.position, RESET);
-            printf("%s ----------------------ENDING\n%s", WHITE, RESET);
 
         }
-        printf("%s ----------------------ENDING\n%s", WHITE, RESET);
+        //Send the message
+        msg_sent.msgtype = msg_rcv.id;
+
+            if(msg_sent.position == -1){
+                printf("HERE\n");
+            }
+        if(msgsnd(mq_id, &msg_sent, sizeof(struct sharedmem_info)- sizeof(long), 0) < 0){
+            printf("Error sending the messsage\n");//TODO MIGHT be a problem here
+
+        }
 
     }
-
-    if(showVerbose == 1) printf("%s [CT] Get messages thread ended %s", RED,RESET);
     pthread_exit(NULL);
 }
 int index_shm(){
-    /*
-    *Searches the Shared memory for an empty slot (Non 0 slot), in which the flight is gonna be put
-    *
-    * Return
-    *   -1 In case of error
-    *
-     *   Else : Returns the shared memory slot given to the flight
-    */
     int i = 0;
-    //printf("TOTAL SIZE %d",max_takeoffs+ max_landings);
-    for (i = 0; i < (max_takeoffs+ max_landings) ; i++){ //para encontrar uma posicao no vetor para atribuir ao voo
-        if( airport->max_flights[i] == 0){
-            return i;
+
+    for(i = 0; i < max_landings + max_takeoffs ; i++){
+        if(airport -> max_flights[i] == 0){
+            airport -> max_flights[i] = 1;
+            return i;//returns the index of the shared memory designated to certain flight
         }
     }
-    puts("[UNAVAILABLE SPACE FOR FLIGHT THREAD]");
-    return -1;
+    return -1;//if an error occurs, -1 is the return value
 }
-
-/*DEBUG FUNCTION*/
-void print_ct(char* name, struct CT_info* list) {
-    printf("------PRINTING %s------\n", name);
-    list = list->next;
-    while (list) {
-        printf("ID %d FUEL %d\n", list->id, list->fuel);
-        list = list->next;
-    }
-}
-
-struct list_arrival *create_arrival_list(){
-    struct list_arrival *header;
-    //verificar se a lista foi criada ou nao
-    if((header = (struct list_arrival *) malloc(sizeof(struct list_arrival))) == NULL){
-        printf("ERRO ao criar a lista de voos arrival.\n");
-        exit(0);
-        //nao sei se queres que o programa acabe ou se queres que isto volte a tentar criar a lista
-        return NULL;
-    }
-    else {
-        header->priority = -1;
-        header->eta = -1;
-        header->fuel = -1;
-        header->shared_memory_index = -1;
-        header->next = NULL;
-    }
-    return header;
-}
-
-struct list_arrival *create_node_arrival(struct CT_info *information){
-    /*
-     * Creates an arrival type node using the de CT info from the message
-     * Parameters
-     *      information - information that derives from the CT that was read from the message queue
-     *
-     * Returns
-     *      Returns a struct node to be added to the arrivals list
-     * */
-
-
-    struct list_arrival *node;
-    int priority = 0;
-
-
-    if((node = (struct list_arrival *) malloc(sizeof(struct list_arrival))) == NULL){
-        printf("Error creating node.\n");
-        exit(0);
-        //nao sei se queres que o programa acabe ou se queres que isto volte a tentar criar a lista
-        return NULL;
-    }
-    //verifica se o voo e prioritario
-    if(information -> fuel == information -> time_to_track + landing_time + 4){
-        priority = 1;
-    }
-
-    node -> priority = priority;
-    node -> eta = information -> time_to_track;
-    node -> fuel = information -> fuel;
-    node -> shared_memory_index = information -> pos;
-    node -> next = NULL;
-
-    return node;
-}
-
-void add_arrival(struct list_arrival *header, struct list_arrival *node){
-    /* Adds the arrival in the correct place in the arrival list, takes in consideration both priority and then fuel (in this order)
-     * Parameters
-     *      Header - pointer to the head of the list to be added
-     *      Node - Node to be added
-     *
-     * */
-
-
-    struct list_arrival * ant, *atual;
-
-    if(header != NULL){//Verify if the list exists
-        ant = header;
-        atual = header -> next;
-
-        while(atual != NULL && node -> priority <= atual -> priority && node -> eta > atual -> eta){//While the priority is equal or lower than the current priority and the node's ETA is greater than the node in the list
-
-            ant = atual;
-            atual = atual -> next;
-
-        }
-
-        node -> next = atual;
-        ant -> next = node;
-    }
-    else{
-        printf("A lista de arrivals passada nao existe!!!!!!!\n");
-    }
-
-}
-
-void pop_arrival(struct list_arrival *header, struct list_arrival *node){
-    /* Remover a node element of the list
-     * Parameters
-     *      Header - Head of the list to be verified
-     *      Node - node to be popped
-     *
-*/
-    struct list_arrival *last, *current;
-
-    if(header != NULL && header -> next != NULL){
-        last = header;
-        current = header->next;
-
-        while(current != NULL && current != node){
-            last = current;
-            current = current -> next;
-        }
-
-        if(current == NULL){
-            printf("The inserted node does not belong to the list\n");
-        }
-        else{
-            last -> next = current -> next; // removes the node from the list
-        }
-    }
-}
-
-void remove_arrival(struct list_arrival *header, struct list_arrival *nodo){
-    /* Same functionality as pop_flight() but this one removes from memory (frees pointer)
-     Parameters
-     *      Header - Head of the list to be verified
-     *      Node - node to be removed
-     *
-     * */
-
-    struct list_arrival *last, *current;
-
-    if(header != NULL){
-
-        last = header;
-        current = header -> next;
-
-        while(current != NULL && current != nodo){
-            last = current;
-            current = current -> next;
-        }
-
-        if(current == NULL){
-            printf("O nodo que inseriu nao existe na lista de arrivals.\n");//nao sei queres fazer algo especial para o caso disto acontecer
-        }
-        else{
-            last->next = current -> next;//Takes the node off the list
-            free(current); // Frees pointer from memory
-        }
-    }
-    else{
-        printf("The List does not exist\n");
-    }
-
-}
-
-void choose_flights_to_hold(struct list_arrival *header){
-    /* This function takes arrivals list and chooses the flight to hold, informs then and reorders the array
-     * Parameters:
-     *      Header - head of the arrival list;
-     *
-     * */
-    struct list_arrival *list;
-    struct list_arrival *temp; //serve para eu guardar o pointer para o nodo que esta a ser ordenado
-    int i, time_to_hold;
-
-    srand(getpid()); // Randomizer
-
-    if(header != NULL){
-
-        if((list = header -> next) != NULL){// First 5 five flights do not need to hold, therefore they are skipped
-            for (i = 0; i < 5  && list != NULL; i++){
-                list = list -> next;
-            }
-
-            while(list != NULL && list -> eta == 0){
-                time_to_hold = rand()%(max_hold - min_hold) + min_hold;//Randomize holding times
-
-                if( (list -> fuel - landing_time) >= time_to_hold){ //Verify if hold is possible
-                    list -> eta = time_to_hold;
-                    //Reorder array
-                    temp = list;
-                    list = list -> next; //passo logo para o nodo seguinte, porque se ficasse no mesmo, o proximo nodo nao seria o correto, visto que vai mudar de posicao na lista
-                    airport -> max_flights[temp -> shared_memory_index] = 7;//Notify the thread that it need to hold
-                    airport->total_holding_man++;
-                    airport->total_time_landing += time_to_hold;
-                    if(list->priority == 1) airport->total_emergency_holding_man++;
-                    pthread_cond_broadcast(&airport->command_var);//notifica a thread para esta ver a mensagem
-
-                    pop_arrival(header, temp);//Removes node from the list
-                    add_arrival(header, temp);//adiciona o nodo na posicao certa da lista
-
-                }
-                else{
-                    //If holding is not possible, Redirect flight
-                    temp = list;//guardo o nodo para poder remove-lo da lista
-                    airport -> max_flights[temp -> shared_memory_index] = 8;
-                    pthread_cond_broadcast(&airport-> command_var);
-                    airport->redirected_flights++;
-                    list = list -> next;//passa para o proximo nodo
-                    pop_arrival(header, temp);//Pop node from the list
-                }
-            }
-
-        }
-        else{
-            printf("Error past list does not have elements\n");
-        }
-    }
-    else{
-        printf("Error, past list does not exist\n");
-        exit(0);
-    }
-}
-
-struct list_departure* create_departure_list(){
-    struct list_departure *header;
-
-    if((header = (struct list_departure *) malloc(sizeof(struct list_departure))) == NULL){
-        printf("Erro ao criar a lista de voos departure.\n");
-        //nao sei se queres que o programa acabe ou tente criar outra vez a lista
-        return NULL;
-    }
-
-    header -> takeoff = -1;
-    header -> shared_memory_index = -1;
-    header -> next = NULL;
-
-    return header;
-}
-
-struct list_departure* create_node_departure(struct CT_info *information){
-    /*Strips info from the struct received by the message queue and create a departure type item
-     * Parameters
-     *      information - Struct with the flight info, from the message queue
-     *
-     *
-     * */
-
-    struct list_departure *node;
-
-    node = (struct list_departure *) malloc(sizeof(struct list_departure));
-
-    node -> takeoff = information -> time_to_track;
-    node -> shared_memory_index = information -> pos;
-    node -> next = NULL;
-
-    return node;
-}
-
-
-void add_departure(struct list_departure *header, struct list_departure *node){
-    /* Adds the departure in the correct place in the departure list, takes in consideration both priority and then fuel (in this order)
-     * Parameters
-     *      Header - pointer to the head of the list to be added
-     *      Node - Node to be added
-     *
-     * */
-
-
-    struct list_departure *last, *current;
-
-    if(header != NULL){
-        last = header;
-        current = header -> next;
-
-        while(current != NULL && node -> takeoff > current -> takeoff){
-            last = current;
-            current = current -> next;
-        }
-
-        node -> next = current;
-        last -> next = node;
-
-    }
-    else{
-        printf("The inserted list does not exist (Departure list)\n");//nao sei se queres que o programa pare ou nao
-    }
-}
-
-
-void remove_departure(struct list_departure *header, struct list_departure *node){
-    /* Take node from the departure list and removes it permanently (freeing memory);
-     * Parameters
-     *      header - the head of the list
-     *      node - the node to be removed
-     * */
-    struct list_departure *last, *current;
-
-    if(header != NULL){
-
-        last = header;
-        current = header -> next;
-
-        while(current != NULL && current != node){
-            last = current;
-            current = current -> next;
-        }
-
-        if(current == NULL){
-            printf("The inserted node does not exist exist in the departures list\n");//nao sei se queres que o programa acabe ou nao se isto acontecer
-        }
-        else{
-            last->next = current -> next;//Removes the node from the list
-            free(current); //Free the memory associated with the node
-        }
-    }
-    else{
-        printf("The Inserted list does not exist\n");//nao sei se queres que o programa acabe ou nao se isto acontecer
-    }
-
-}
-
-void choose_flights_to_work(struct list_arrival *header_arrival, struct list_departure *header_departure){
-
-    struct list_arrival *arrival;
-    struct list_departure *departure;
-
-    int aux = 0;
-
-    printf("STARTED CHOOSING FLIGHTS\n");
-    //colocar um mutex nesta variavel porque quando estou a colocar outro voo tenho de o fazer sem esta estar a ser lida pela control tower
-    if(header_arrival == NULL && header_departure == NULL){
-        printf("Arrival and departure list were nor created with success\n");
-    }
-
-
-    //colocar algo que pare a thread se nao houverem voos para executar
-    pthread_mutex_lock(&is_it_time_mutex);
-
-    while(header_arrival -> next != NULL || header_departure -> next != NULL || running == 1){ //condition e a tal variavel que e alterada para dizer a control tower que o programa vai acabar
-
-        ////////////            fazer wait pelo signal da thread que decrementa o eta e verifica o takeoff
-        ///////////             colocar dentro de um if, ou seja so fica a espera se o eta do voo a seguir for diferente de 0 e o takeoff do voo for diferente do momento atual (usar a funcao compare_time)
-        //////////              fazer isto em exclusao mutua, pois a decrementa_eta vai estar a alterar os valores que estao a ser acedidos aqui
-        /////////               de qualquer forma, se ficar parado num mutex, nao e espera ativa, entao OK
-
-        //puts("-±±±±±±±±±±±ENTERS LOOP");
-        pthread_mutex_lock(&check_eta_mutex);
-        if(  (header_arrival -> next == NULL && header_departure -> next == NULL) ||  (header_arrival -> next == NULL && compare_time(begin, convert_to_wait(header_departure -> next -> takeoff, time_unit)) == -1)  ||  (header_departure -> next == NULL && header_arrival -> next -> eta != 0 )   ||  (header_arrival -> next -> eta != 0 && compare_time(begin, convert_to_wait(header_departure -> next -> takeoff, time_unit)) == -1)     ){
-            //puts("-±±±±±±±±±±±VAR1");
-            pthread_mutex_unlock(&check_eta_mutex);
-            pthread_cond_wait(&is_it_time_var, &is_it_time_mutex);//tem de ser criada esta variavel de condicao
-        }
-        else{
-            pthread_mutex_unlock(&check_eta_mutex);
-        }
-
-        //puts("-±±±±±±±±±±±SKIPS  CONDITION");
-        while(header_arrival -> next != NULL && aux < 2 ){
-            //se o aux chegar a 2, quer dizer que foram executados dois arrivals e chegou a vez dos departures
-
-            arrival = header_arrival -> next;//seleciona o voo a executar
-
-            pthread_mutex_lock(&check_eta_mutex);
-            if(arrival != NULL && arrival -> eta == 0){
-
-                if( aux == 1 || (arrival -> next != NULL && arrival -> next -> eta != 0) || arrival -> next == NULL){//executa apenas um da lista de arrivals
-                    pthread_mutex_unlock(&check_eta_mutex);
-
-                    //manda o voo aterrar
-                    if(aux == 0){
-                        airport -> max_flights[arrival -> shared_memory_index] = 5;//diz qual e a pista a utilizar pelo voo
-                    }
-                    else if(aux == 1){
-                        airport -> max_flights[arrival -> shared_memory_index] = 6;
-                    }
-                    airport->total_landed++;
-                    pthread_cond_broadcast(&airport->command_var);
-
-                    aux ++;
-                    //retira o voo do array
-                    remove_arrival(header_arrival, arrival);
-
-                    usleep(((landing_time + landing_delta) * time_unit) * 1000);
-
-                }
-                else if(arrival -> next != NULL && arrival -> next -> eta == 0){//executa dois da lista de arrivals
-                    pthread_mutex_unlock(&check_eta_mutex);
-
-                    //manda o voo aterrar
-
-                    airport -> max_flights[arrival -> shared_memory_index] = 5;//diz qual e a pista a utilizar pelo voo
-
-                    airport -> max_flights[arrival -> next -> shared_memory_index] = 6;
-
-                    pthread_cond_broadcast(&airport->command_var);
-
-                    airport->total_landed +=2;
-                    aux = 2;
-                    //retira o voo do array
-                    remove_arrival(header_arrival, arrival -> next);
-                    remove_arrival(header_arrival, arrival);
-
-                    usleep(((landing_time + landing_delta) * time_unit) * 1000);
-
-                }
-
-            }
-            else{
-                pthread_mutex_unlock(&check_eta_mutex);
-                aux = 2;//se o eta nao for igual a 0 quero que passe para ir ver se pode fazer alguma departure
-            }
-
-        }
-
-
-
-        aux = 0; //reset da variavel aux para poder ser usada com o mesmo proposito nos departure
-
-
-        while(header_departure -> next != NULL && aux < 2){
-
-            departure = header_departure -> next;
-
-            if(departure != NULL && compare_time(begin, convert_to_wait(departure -> takeoff, time_unit)) == 1 ){
-
-                if( aux == 1 || (departure -> next != NULL && compare_time(begin, convert_to_wait(departure -> next -> takeoff, time_unit)) == -1) || departure -> next == NULL){
-
-                    //avisa a thread que pode aterrar
-                    if(aux == 0){
-                        airport -> max_flights[departure -> shared_memory_index] = 2;
-                    }
-                    else if(aux == 1){
-                        airport -> max_flights[departure -> shared_memory_index] = 3;
-                    }
-                    int time = now_in_tm(begin,time_unit);
-                    airport->total_time_takeoff += (time - departure->takeoff);
-                    airport->total_takeoff++;
-                    pthread_cond_broadcast(&airport->command_var);
-
-                    aux ++;
-
-                    //retirar o voo do array
-                    remove_departure(header_departure, departure);
-
-                    usleep(((takeoff_time + takeoff_delta) * time_unit) * 1000);
-
-
-                }
-                else if(departure -> next != NULL && compare_time(begin, convert_to_wait(departure -> next -> takeoff, time_unit)) == 1){
-
-                    airport -> max_flights[departure -> shared_memory_index] = 2;
-                    airport -> max_flights[departure -> next -> shared_memory_index] = 3;
-
-                    int time = now_in_tm(begin,time_unit);
-
-                    airport->total_time_takeoff += (time - departure->takeoff) + (time - departure->next->takeoff);
-
-                    pthread_cond_broadcast(&airport->command_var);
-                    airport->total_takeoff +=2;
-
-                    aux = 2;
-
-                    //retirar os dois voos do array
-                    remove_departure(header_departure, departure -> next);
-                    remove_departure(header_departure, departure);
-
-                    usleep(((takeoff_time + takeoff_delta) * time_unit) * 1000);
-
-                }
-            }
-            else{
-                aux = 2;//passa a frente as departures porque nao ha nenhuma que possa ser executada
-            }
-
-        }
-        //reset as variaveis
-        aux = 0;
-
-    }
-    pthread_mutex_unlock(&is_it_time_mutex);
-}
-
-//funcao que verifica se ha algum voo que pode ser executado e decrementa o eta e o fuel dos voos arrival
-void* check_flights(void *arg){
-    struct lists *temp = (struct lists*) arg;
-    struct lists args =  *temp;
-    struct list_arrival *header_arrival;
-    struct list_departure *header_departure;
-    header_arrival = args.arrival;
-    header_departure = args.departure;
-
-
-    int time_unit_in_ns = time_unit * 1000;//time_unit in ms to time_unit in ns for the usleep function
-    struct list_arrival *arrival;
-
-
-
-    if(header_arrival != NULL && header_departure != NULL){
-        //decrementa o ETA
-        while(header_arrival -> next != NULL || header_departure->next != NULL || running == 1){
-            if(header_arrival -> next != NULL){
-                arrival = header_arrival -> next;
-
-                //decrementa o eta em exclusao mutua
-                pthread_mutex_lock(&check_eta_mutex);
-                while(arrival != NULL){
-                    if(arrival -> eta > 0){
-                        arrival -> eta --;
-                    }
-
-                    arrival = arrival ->  next;
-                }
-                pthread_mutex_unlock(&check_eta_mutex);
-
-                //se houverem mais do que 5 voos com eta = 0, os 5+ com eta = 0 sao redirecionados, os outros fazem holding
-                choose_flights_to_hold(header_arrival);
-                if(header_arrival -> next -> eta == 0){
-                    //############
-                    //para avisar a torre de controlo que ha pelo menos um voo que pode ser executado
-                    pthread_cond_broadcast(&is_it_time_var);
-
-                }
-                //##########
-            }
-
-            if(header_departure -> next != NULL){
-
-                if(compare_time(begin, convert_to_wait(header_departure -> next -> takeoff, time_unit)) == 1){//se for tempo para executar o primeiro departure, entao a control tower e sinalizada
-                    pthread_cond_broadcast(&is_it_time_var);
-                }
-
-            }
-
-
-            usleep(time_unit_in_ns);//espera uma time_unit para decrementar os eta's
-        }
-    }
-    pthread_cond_broadcast(&is_it_time_var);
-    pthread_exit(NULL);//ter de ser feito join <<<-- alterado
-}
-
-
-//se for o tempo de executar o departure retorn a 1, caso contrario -1
-int compare_time(struct timespec begin, struct wt takeoff){
-    struct timespec temp;
-    struct timespec now;
-    clock_gettime(CLOCK_REALTIME, &now);
-
-    temp.tv_sec = begin.tv_sec;
-    temp.tv_nsec = begin.tv_nsec;
-
-    if(begin.tv_nsec + takeoff.nsecs > 1000000000 ){
-        temp.tv_sec += 1;
-        temp.tv_nsec = (begin.tv_nsec + takeoff.nsecs) % 1000000000;
-    }
-    temp.tv_sec += takeoff.secs;
-
-    if(now.tv_sec >= temp.tv_sec && now.tv_nsec >= temp.tv_nsec){
-        return 1;
-    }
-    else{
-        return -1;
-    }
-}
-
-
-void print_arrivals(){
-    struct list_arrival *element = arrival_list;
-    for(int i = 0; element != NULL; i++){
-        printf("NUMBER %d SHARED MEMORY INDEX %d \n", i, element->shared_memory_index);
-        element = element->next;
-    }
-    puts("--------------------");
-}
-
-void print_departures(){
-    struct list_departure *element = departure_list;
-    for(int i = 0; element != NULL; i++){
-        printf("NUMBER %d SHARED MEMORY INDEX %d \n", i, element->shared_memory_index);
-        element = element->next;
-    }
-    puts("--------------------");
-
-
-};
