@@ -420,8 +420,8 @@ void get_message_from_pipe(int file_d) {
         while (command == 1) {//colocar a condicao uma vez a shared memory criada com as posicoes para os comandos
             printf("%s[THREAD][WAITING FOR COMMAND] [MYID] %ld [POS] %d%s\n",YELLOW,temp.msgtype,temp.position, RESET);
             pthread_cond_wait(&airport->command_var, &airport->mutex_command);
-            printf("%s READ NEW COMMAND SUCCESSFULLY %d %s\n", RED,command, RESET);
             command = airport->max_flights[temp.position];
+            printf("%s READ NEW COMMAND SUCCESSFULLY %d %s\n", RED,command, RESET);
 
         }
         pthread_mutex_unlock(&airport->mutex_command);;

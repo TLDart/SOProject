@@ -30,7 +30,8 @@ struct list_departure{
     struct list_departure *next;
 };
 
-extern int mq_id, max_landings, max_takeoffs;
+extern pthread_cond_t command_var;
+extern int mq_id, max_landings, max_takeoffs, takeoff_time, takeoff_delta, max_hold, min_hold, landing_delta;
 extern shared_mem *airport;
 
 int runningCT = 1,
@@ -53,6 +54,7 @@ void control_tower();
 void *get_messages(void *arg);
 int index_shm();
 void flight_handler();
+int compare_time(struct timespec begin, struct wt takeoff);
 struct list_arrival *create_arrival_list();
 struct list_arrival *create_node_arrival(struct message *information, int position);
 void add_arrival(struct list_arrival *header, struct list_arrival *node);

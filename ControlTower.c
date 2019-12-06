@@ -55,7 +55,6 @@ void *get_messages(void *arg) {
                 new_message = 0;
                 pthread_mutex_unlock(&flight_verifier);
             }
-
         }
         else if(msg_rcv.mode == 0){// Departure
 
@@ -109,23 +108,127 @@ void flight_handler(){
     /* This will hopefully handle the flights
      *
      * */
-
-    while(runningCT == 1 || header_departure != 0 || header_arrival !=0){
+    srand(getppid());
+    struct list_arrival *node_arrival;
+    struct list_arrival *hold_temp;
+    struct list_arrival *current_element;
+    int random_number;
+    int sleeptime = 0;
+    int counter = 0;
+    while(runningCT == 1 || header_departure != 0 || header_arrival !=0) {
+        sleeptime = 0;
         pthread_mutex_lock(&flight_verifier);
-        if(new_message == 1){
+        if (new_message == 1) {
             pthread_mutex_unlock(&flight_verifier);
             sem_post(can_send);
             printf("PODE ADICIONAR\n");
             sem_wait(can_hold);
             printf("PODE CONTINUAR\n");
 
-        }
-        else{
+        } else {
             pthread_mutex_unlock(&flight_verifier);
         }
 
-    }
+        /*Decrementing Fuel*/
+        if (header_arrival->number_of_nodes > 0) {
+            node_arrival = header_arrival->next;
+            while (node_arrival->next != NULL) {
+                if (compare_time(begin, convert_to_wait(node_arrival->eta, time_unit)) == -1) {
+                    node_arrival->fuel--;
+                    node_arrival = node_arrival->next;
+                }
+            }
+        }
+        /*Chosing holding*/
+        if (header_arrival->number_of_nodes > 5) {
+            hold_temp = header_arrival->next;
+            for (int i = 0; i < 5; i++) {
+                hold_temp = hold_temp->next;
+            }
+            while (hold_temp != NULL && compare_time(begin, convert_to_wait(hold_temp->eta, time_unit)) == 1) {
+                random_number = rand() % (max_hold - min_hold) + min_hold; //Calculates the random hold value
+                if ((hold_temp->fuel - landing_time - random_number) > 0) {
+                    current_element = hold_temp;
+                    hold_temp = hold_temp->next;
+                    current_element->eta += random_number;
+                    airport->total_holding_man++;
+                    airport->total_time_landing += random_number;
+                    if (hold_temp->priority == 1) airport->total_emergency_holding_man++;
+                    airport->max_flights[hold_temp->shared_memory_index] = 7;
+                    pthread_cond_broadcast(&airport->command_var);
+                    pop_arrival(header_arrival, current_element);
+                    add_arrival(header_arrival, current_element);
+                } else {
+                    current_element = hold_temp;
+                    hold_temp = hold_temp->next;
+                    airport->max_flights[hold_temp->shared_memory_index] = 8;
+                    airport->redirected_flights++;
+                    pthread_cond_broadcast(&airport->command_var);
+                    remove_arrival(header_arrival, current_element);
+                }
+            }
+        }
+        /*Choose flight to work)*/
+        if(counter % 2 == 0){
+            if (header_arrival->number_of_nodes > 0) {
+                if (compare_time(begin, convert_to_wait(header_arrival->next->eta, time_unit)) == 1) {// If it is time to shedule the flight
+                    airport->max_flights[header_arrival->next->shared_memory_index] = 5;
+                    pthread_cond_broadcast(&airport->command_var);
+                    header_arrival->number_of_nodes--;
+                    airport->total_landed++;
+                    remove_arrival(header_arrival,header_arrival->next);
+                    sleeptime = landing_time + landing_delta;
+                    usleep(sleeptime * 1000);
+                }
+            }
+        }
+        else{
+            if(header_departure->number_of_nodes > 0){
+                if (compare_time(begin, convert_to_wait(header_departure->next->takeoff, time_unit)) == 1) {// If it is time to shedule the flight
+                    airport->max_flights[header_departure->next->shared_memory_index] = 2;
+                    pthread_cond_broadcast(&airport->command_var);
+                    header_departure->number_of_nodes--;
+                    airport->total_takeoff++;
+                    remove_departure(header_departure,header_departure->next);
+                    sleeptime = takeoff_time + takeoff_delta;
+                    usleep(sleeptime * 1000);
 
+                }
+            }
+        }
+        if (header_arrival->number_of_nodes > 0) {
+            node_arrival = header_arrival->next;
+            while (node_arrival->next != NULL) {
+                if (compare_time(begin, convert_to_wait(node_arrival->eta, time_unit)) == -1) {
+                    node_arrival->fuel -= sleeptime;
+                    node_arrival = node_arrival->next;
+                }
+            }
+        }
+        counter++;
+        usleep(time_unit *1000); // Sleeping a time unit
+    }
+}
+int compare_time(struct timespec begin, struct wt takeoff){
+    struct timespec temp;
+    struct timespec now;
+    clock_gettime(CLOCK_REALTIME, &now);
+
+    temp.tv_sec = begin.tv_sec;
+    temp.tv_nsec = begin.tv_nsec;
+
+    if(begin.tv_nsec + takeoff.nsecs > 1000000000 ){
+        temp.tv_sec += 1;
+        temp.tv_nsec = (begin.tv_nsec + takeoff.nsecs) % 1000000000;
+    }
+    temp.tv_sec += takeoff.secs;
+
+    if(now.tv_sec >= temp.tv_sec && now.tv_nsec >= temp.tv_nsec){
+        return 1;
+    }
+    else{
+        return -1;
+    }
 }
 struct list_arrival *create_arrival_list(){
     /* Creates the arrival list
@@ -355,5 +458,4 @@ void remove_departure(struct list_departure *header, struct list_departure *node
     else{
         printf("The Inserted list does not exist\n");//nao sei se queres que o programa acabe ou nao se isto acontecer
     }
-
 }
