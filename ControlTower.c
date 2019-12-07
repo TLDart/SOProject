@@ -45,7 +45,7 @@ void *get_messages(void *arg) {
                 msg_sent.position = index_shm(); // Finds an available index the shared_mem
                 pthread_mutex_unlock(&flight_verifier);
                 new_message = 1;
-                pthread_cond_broadcast(&awake_holder); // Broadcasts to awake the thread
+                pthread_cond_broadcast(&awake_holder_var); // Broadcasts to awake the thread
                 pthread_mutex_unlock(&flight_verifier);
                 sem_wait(can_send); //waits for the flight handler to put the node on the list
                 add_arrival(header_arrival, create_node_arrival(&msg_rcv, msg_sent.position));
@@ -66,7 +66,7 @@ void *get_messages(void *arg) {
                 msg_sent.position = index_shm();
                 pthread_mutex_lock(&flight_verifier);
                 new_message = 1;
-                pthread_cond_broadcast(&awake_holder); // Broadcasts to awake the thread
+                pthread_cond_broadcast(&awake_holder_var); // Broadcasts to awake the thread
                 pthread_mutex_unlock(&flight_verifier);
                 sem_wait(can_send);
                 add_to_departure(header_departure, create_node_departure(&msg_rcv, msg_sent.position));
@@ -115,7 +115,13 @@ void flight_handler(){
     int random_number;
     int sleeptime = 0;
     int counter = 0;
-    while(runningCT == 1 || header_departure != 0 || header_arrival !=0) {
+    while(runningCT == 1 || header_departure->number_of_nodes != 0 || header_arrival->number_of_nodes != 0) {
+        pthread_mutex_lock(&awake_holder_mutex);
+        while(new_message != 1 && header_departure->number_of_nodes == 0 && header_arrival->number_of_nodes == 0){ // Stop if the both lists are empty and there is no new message
+            pthread_cond_wait(&awake_holder_var,&awake_holder_mutex);
+        }
+        pthread_mutex_unlock(&awake_holder_mutex);
+
         sleeptime = 0;
         pthread_mutex_lock(&flight_verifier);
         if (new_message == 1) {

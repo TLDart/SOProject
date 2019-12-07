@@ -43,7 +43,10 @@ struct list_departure *header_departure;
 struct list_arrival *header_arrival;
 pthread_t messenger;
 pthread_mutex_t flight_verifier = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t awake_holder = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t awake_holder_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t awake_holder_var = PTHREAD_COND_INITIALIZER;
+
+
 
 sem_t *can_send,
       *can_hold;
