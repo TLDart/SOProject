@@ -92,26 +92,26 @@ void simulation_manager(char *config_path) {
 
     pthread_create(&flight_creator, NULL, create_flights, head); /*Create Flight_Creator_Thread */
 
+    pthread_create(&thread_exit, NULL, exit_thread, NULL); /*Create Flight_Creator_Thread */
+    printf("THREAD CREATES\n");
+
     if (showVerbose == 1) printf("Correctly initiated Time Thread\n");
 
     /*Run getting a message from the pipe*/
     get_message_from_pipe(pipe_fd);
     puts("PIPE CLOSED");
     /*Cleaning The system*/
-
-    pthread_join(flight_creator, NULL);
-    puts("FLIGHT CREATOR CLOSED");
-    pthread_create(&thread_exit, NULL, exit_thread, NULL); /*Create Flight_Creator_Thread */
-    puts("THREAD CREATES");
     pthread_join(thread_exit,NULL);
-    puts("THREAD EXITED");
+    printf("THREAD EXITED\n");
+    pthread_join(flight_creator, NULL);
+    printf("FLIGHT CREATOR CLOSED\n");
     wait(NULL);
-    puts("CONTROL TOWER DOWN");
+    printf("CONTROL TOWER DOWN\n");
     shmdt(airport);
     shmctl(shmid, IPC_RMID, 0);
     unlink(PIPE_NAME);
     msgctl(mq_id,IPC_RMID,0);
-    puts("XAU LAURA");
+    printf("XAU LAURA\n");
     exit(0);
 }
 
@@ -193,6 +193,9 @@ void exit_handler(int signum) {
      *      signum - Number to the signal
      */
     write_to_log("[PROGRAM ENDING]");
+    /*Creates the last thread*/
+
+
     running = 0;
 
     /*Setting the pipe to non block*/
@@ -355,7 +358,8 @@ void get_message_from_pipe(int file_d) {
             }
         }
         pthread_mutex_unlock(&mutex_time);
-        puts("REACHED END");
+        printf("REACHED END\n");
+        pthread_cond_broadcast(&exitor_var);
         pthread_exit(NULL);
     }
 
@@ -574,12 +578,17 @@ void get_message_from_pipe(int file_d) {
 void *exit_thread(void *arg){
     struct message msg;
 
-    puts("LAST FLIGHT");
+    printf("LAST FLIGHT\n");
+    pthread_mutex_lock(&exitor_mutex);
+    pthread_cond_wait(&exitor_var, &exitor_mutex);
+    pthread_mutex_unlock(&exitor_mutex);
+    sleep(1);
+    printf("SENT LAST FLIGHT\n");
     msg.msgtype = MSGTYPE_EXIT;
-    msg.mode = 1;
+    msg.mode = -1;
     msg.fuel = -1;
     msg.time_to_track = -1;
-    msg.id = - 1;
+    msg.id = -1;
 
     if (msgsnd(mq_id, &msg, sizeof(msg) - sizeof(long), 0) == -1) {/*Sends message to the control tower*/
         perror("ERROR SENDING MESSAGE");

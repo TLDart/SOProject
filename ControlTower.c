@@ -2,6 +2,7 @@
 
 
 void control_tower(){
+    signal(SIGINT, SIG_IGN);
     sem_unlink(CAN_HOLD);
     can_hold = sem_open(CAN_HOLD,O_CREAT| O_EXCL,0700,0);
     sem_unlink(CAN_SEND);
@@ -77,7 +78,17 @@ void *get_messages(void *arg) {
                 pthread_mutex_unlock(&flight_verifier);
 
             }
-
+        }
+        else if(msg_rcv.mode == -1){
+            printf("RECEIVED END MESSAGE\n");
+            runningCT = 0;
+            new_message = 1;
+            pthread_cond_broadcast(&awake_holder_var);
+            sem_wait(can_send);
+            sem_post(can_hold);
+            pthread_mutex_lock(&flight_verifier);
+            new_message = 0;
+            pthread_mutex_unlock(&flight_verifier);
         }
         //Send the message
         msg_sent.msgtype = msg_rcv.id;
@@ -85,9 +96,11 @@ void *get_messages(void *arg) {
         if(msg_sent.position == -1){
             printf("HERE\n");
         }
-        if(msgsnd(mq_id, &msg_sent, sizeof(struct sharedmem_info)- sizeof(long), 0) < 0){
-            printf("Error sending the messsage\n");//TODO MIGHT be a problem here
+        if(msg_rcv.mode != -1) {
+            if (msgsnd(mq_id, &msg_sent, sizeof(struct sharedmem_info) - sizeof(long), 0) < 0) {
+                printf("Error sending the messsage\n");//TODO MIGHT be a problem here
 
+            }
         }
     }
     pthread_exit(NULL);
@@ -119,6 +132,7 @@ void flight_handler(){
         pthread_mutex_lock(&awake_holder_mutex);
         while(new_message != 1 && header_departure->number_of_nodes == 0 && header_arrival->number_of_nodes == 0){ // Stop if the both lists are empty and there is no new message
             pthread_cond_wait(&awake_holder_var,&awake_holder_mutex);
+
         }
         pthread_mutex_unlock(&awake_holder_mutex);
 

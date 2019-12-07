@@ -53,7 +53,9 @@ int list_element = 0; // Keeps track of the supposed beginning of the list
 /*Conditional Variables and Mutexes*/
 pthread_cond_t time_var = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t mutex_time = PTHREAD_MUTEX_INITIALIZER;
-
+pthread_cond_t exitor_var = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t exitor_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_t thread_exit;
 
 void write_to_log(char *msg);
 void clean_log();
