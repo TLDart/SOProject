@@ -3,7 +3,6 @@
 
 void control_tower(){
     signal(SIGINT, SIG_IGN);
-    signal(SIGUSR1, )
     sem_unlink(CAN_HOLD);
     can_hold = sem_open(CAN_HOLD,O_CREAT| O_EXCL,0700,0);
     sem_unlink(CAN_SEND);
