@@ -353,7 +353,12 @@ void add_arrival(struct list_arrival *header, struct list_arrival *node){
         last = header;
         current = header -> next;
 
-        while(current != NULL && node -> priority <= current -> priority && node -> eta > current -> eta){//While the priority is equal or lower than the current priority and the node's ETA is greater than the node in the list
+        while(current != NULL && node -> eta > current -> eta){//While the priority is equal or lower than the current priority and the node's ETA is greater than the node in the list
+            last = current;
+            current = current -> next;
+
+        }
+        while(current != NULL && node -> priority < current -> priority){//While the priority is equal or lower than the current priority and the node's ETA is greater than the node in the list
             last = current;
             current = current -> next;
 
