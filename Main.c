@@ -71,15 +71,12 @@ void simulation_manager(char *config_path) {
     }
 
     if(showVerbose == 1 ) printf("%s [MESSAGE QUEUE CREATED]%s\n", BLUE, RESET);
+
+    if(showVerbose == 1 ) printf(" _>>>takeoff time %d takeoffDelta %d Time unit %d min_hold %d\n", takeoff_time,takeoff_delta,time_unit, min_hold);
     /*Create Control Tower*/
-
-    printf(" _>>>takeoff time %d takeoffDelta %d Time unit %d min_hold %d\n", takeoff_time,takeoff_delta,time_unit, min_hold);
-    //printf(">>>%d takeoffDelta %d Time unit %d\n", takeoff_time,takeoff_delta,time_unit);
-
-
     if (fork() == 0) {
         control_tower();
-        puts(" CT EXITED");
+        if(showVerbose == 1 ) puts(" CT EXITED");
         exit(0);
     }
 
@@ -91,22 +88,22 @@ void simulation_manager(char *config_path) {
     if(showVerbose == 1 ) printf("%s [NAMED PIPE CREATED]%s\n", BLUE, RESET);
 
     pthread_create(&flight_creator, NULL, create_flights, head); /*Create Flight_Creator_Thread */
-
     pthread_create(&thread_exit, NULL, exit_thread, NULL); /*Create Flight_Creator_Thread */
-    printf("THREAD CREATES\n");
+
+    if(showVerbose == 1 ) printf("THREAD CREATES\n");
 
     if (showVerbose == 1) printf("Correctly initiated Time Thread\n");
 
     /*Run getting a message from the pipe*/
     get_message_from_pipe(pipe_fd);
-    puts("PIPE CLOSED");
+    if(showVerbose == 1 ) puts("PIPE CLOSED");
     /*Cleaning The system*/
     pthread_join(thread_exit,NULL);
-    //printf("THREAD EXITED\n");
+    if(showVerbose == 1 ) printf("THREAD EXITED\n");
     pthread_join(flight_creator, NULL);
-    //printf("FLIGHT CREATOR CLOSED\n");
+    if(showVerbose == 1 ) printf("FLIGHT CREATOR CLOSED\n");
     wait(NULL);
-    //printf("CONTROL TOWER DOWN\n");
+    if(showVerbose == 1 ) printf("CONTROL TOWER DOWN\n");
 
     /*Cleaning*/
     /*Shared Memory*/
@@ -129,7 +126,7 @@ void simulation_manager(char *config_path) {
     fclose(logfile);
     unlink(PIPE_NAME);
     msgctl(mq_id,IPC_RMID,0);
-    //printf("XAU LAURA\n");
+    if(showVerbose == 1 ) printf("XAU LAURA\n");
     /*Exiting*/
     write_to_log("[PROGRAMS ENDS]");
     exit(0);
@@ -246,7 +243,7 @@ void parse_arguments(int argc, char **argv) {
         if (strcmp(argv[i], "-f") == 0) {
             if (i + 1 <= argc) {
                 filename = malloc(strlen(argv[i + 1]));
-                printf("%s", argv[i + 1]);
+                if(showVerbose == 1 ) printf("%s", argv[i + 1]);
                 strcpy(filename, argv[i + 1]);
             }
         }
@@ -284,7 +281,7 @@ void get_message_from_pipe(int file_d) {
      *      file_d = Indication of the file descriptor of the pipe
      *
      */
-    puts("[PIPE HANDLER THREAD CREATED]");
+    if(showVerbose == 1 ) puts("[PIPE HANDLER THREAD CREATED]");
     char buffer[BUFFER_SIZE];
     int nread;
     p_node parsed_data;
@@ -298,7 +295,7 @@ void get_message_from_pipe(int file_d) {
                     buffer[nread - 1] = '\0';
                 parsed_data = parsing(buffer); // Handle the buffer
                 if (parsed_data != NULL) {
-                    //printf("%sPARSER ADDED %s", CYAN,RESET);
+                    if(showVerbose == 1 ) printf("%sPARSER ADDED %s", CYAN,RESET);
                     add_flight(parsed_data, head);
                     airport->total_flights++;
                 }
@@ -322,7 +319,7 @@ void get_message_from_pipe(int file_d) {
          * Parameters:
          *      pointer - Pointer to struct of type p_node which is the head of the list
          */
-        printf("FLIGHT CREATOR\n");
+        if(showVerbose == 1 ) printf("FLIGHT CREATOR\n");
         p_node list = head, flight;
         pthread_t thread; //New thread to be Created
         struct args_threads *args;// Pointer to struct that holds flight information, this struct will be handed to the flight on creation
@@ -331,7 +328,7 @@ void get_message_from_pipe(int file_d) {
         while (running == 1 || list->next != NULL) {
             flight = list->next;
             if(flight == NULL){
-                //printf("%sNULL ELEMENT%s\n", RED,RESET);
+                if(showVerbose == 1 ) printf("%sNULL ELEMENT%s\n", RED,RESET);
                 pthread_cond_wait(&time_var, &mutex_time);
             }
             else{
@@ -378,7 +375,7 @@ void get_message_from_pipe(int file_d) {
             }
         }
         pthread_mutex_unlock(&mutex_time);
-        printf("REACHED END\n");
+        if(showVerbose == 1 ) printf("REACHED END\n");
         pthread_cond_broadcast(&exitor_var);
         pthread_exit(NULL);
     }
@@ -410,19 +407,19 @@ void get_message_from_pipe(int file_d) {
         msg.time_to_track = data->node->takeoff;
         msg.id = data->id;
         msg.flight_code = get_flight_code(data->node->flight_code);
-        printf("%s[THREAD][MSG SENT][ID] %d %s\n", CYAN,msg.id, RESET);
+        if(showVerbose == 1 ) printf("%s[THREAD][MSG SENT][ID] %d %s\n", CYAN,msg.id, RESET);
 
         if (msgsnd(mq_id, &msg, sizeof(msg) - sizeof(long), 0) == -1) {/*Sends the message to the control tower*/
             perror("SENDING MESSAGE ERROR");
             exit(-1);
         }
-        printf("%s-------------[THREAD][MSG SENT SUCESSFULLY][ID] %d %s\n", WHITE,msg.id, RESET);
+        if(showVerbose == 1 ) printf("%s-------------[THREAD][MSG SENT SUCESSFULLY][ID] %d %s\n", WHITE,msg.id, RESET);
 
         if (msgrcv(mq_id, &temp, sizeof(temp) - sizeof(long), msg.id, 0) == -1) {/*Reads the message from the control Tower*/
             perror("RECEIVING MESSAGE ERROR");
             exit(-1);
         }
-        printf("%s[THREAD][RECEIVED MSG SUCCESSFULLY] [MYID] %ld [POS] %d\n%s",CYAN,temp.msgtype,temp.position, RESET);
+        if(showVerbose == 1 ) printf("%s[THREAD][RECEIVED MSG SUCCESSFULLY] [MYID] %ld [POS] %d\n%s",CYAN,temp.msgtype,temp.position, RESET);
 
         /*
         for(int i  = 0; i < 10; i++){
@@ -441,10 +438,10 @@ void get_message_from_pipe(int file_d) {
         //Post Thread Activity
         pthread_mutex_lock(&airport->mutex_command);
         while (command == 1) {//colocar a condicao uma vez a shared memory criada com as posicoes para os comandos
-            printf("%s[THREAD][WAITING FOR COMMAND] [MYID] %ld [POS] %d%s\n",YELLOW,temp.msgtype,temp.position, RESET);
+            if(showVerbose == 1 ) printf("%s[THREAD][WAITING FOR COMMAND] [MYID] %ld [POS] %d%s\n",YELLOW,temp.msgtype,temp.position, RESET);
             pthread_cond_wait(&airport->command_var, &airport->mutex_command);
             command = airport->max_flights[temp.position];
-            printf("%s READ NEW COMMAND SUCCESSFULLY %d %s\n", RED,command, RESET);
+            if(showVerbose == 1 ) printf("%s READ NEW COMMAND SUCCESSFULLY %d %s\n", RED,command, RESET);
 
         }
         pthread_mutex_unlock(&airport->mutex_command);;
@@ -477,7 +474,7 @@ void get_message_from_pipe(int file_d) {
         free(aux);
         free(data->node);
         free(data);
-        printf("%s THREAD EXITED SUCCESSFULLY \n%s", MAGENTA,RESET);
+        if(showVerbose == 1 ) printf("%s THREAD EXITED SUCCESSFULLY \n%s", MAGENTA,RESET);
         pthread_detach(pthread_self());
         pthread_exit(NULL);
     }
@@ -521,19 +518,19 @@ void get_message_from_pipe(int file_d) {
         msg.flight_code = get_flight_code(data->node->flight_code);
 
 
-        printf("%s[THREAD][MSG SENT] [ID] %d%s\n",CYAN, msg.id, RESET);
+        if(showVerbose == 1 ) printf("%s[THREAD][MSG SENT] [ID] %d%s\n",CYAN, msg.id, RESET);
 
         if (msgsnd(mq_id, &msg, sizeof(msg) - sizeof(long), 0) == -1) {/*Sends message to the control tower*/
             perror("ERROR SENDING MESSAGE");
             exit(-1);
         }
-        printf("%s-------------[THREAD][MSG SENT SUCESSFULLY][ID] %d %s\n", WHITE,msg.id, RESET);
+        if(showVerbose == 1 ) printf("%s-------------[THREAD][MSG SENT SUCESSFULLY][ID] %d %s\n", WHITE,msg.id, RESET);
 
         if (msgrcv(mq_id, &temp, sizeof(temp) - sizeof(long), msg.id, 0) == -1) {/*Receives message from control tower*/
             perror("ERROR RECEIVING MESSAGE");
             exit(-1);
         }
-        printf("%s[THREAD][RECEIVED MSG SUCCESSFULLY] [MYID] %ld [POS] %d\n%s",CYAN,temp.msgtype,temp.position, RESET);
+        if(showVerbose == 1 ) printf("%s[THREAD][RECEIVED MSG SUCCESSFULLY] [MYID] %ld [POS] %d\n%s",CYAN,temp.msgtype,temp.position, RESET);
 
         //Wait for command loop
 
@@ -550,7 +547,7 @@ void get_message_from_pipe(int file_d) {
 
             pthread_cond_wait(&airport->command_var, &airport->mutex_command);
             command = airport->max_flights[temp.position];
-            printf("%s[THREAD][WAITING FOR COMMAND] [MYID] %s [POS] %d [COMMAND] %d\n%s",YELLOW,data->node->flight_code,temp.position,command, RESET);
+            if(showVerbose == 1 ) printf("%s[THREAD][WAITING FOR COMMAND] [MYID] %s [POS] %d [COMMAND] %d\n%s",YELLOW,data->node->flight_code,temp.position,command, RESET);
             //printf("READ NEW COMMAND SUCESSFULLY %d\n", command);
             if (airport->max_flights[temp.position] == 7) {//se receber um holding escreve essa informacao no log
                 //sprintf(aux, "%s HOLDING", data->node->flight_code);//TODO:RECHECK THIS
@@ -569,7 +566,6 @@ void get_message_from_pipe(int file_d) {
             if (command == 5)strcpy(track, "L1");
             else strcpy(track, "L2");
             aux = (char *) malloc(sizeof(char) * SIZE);
-            printf("%s\n", aux);
             sprintf(aux, "%s LANDING %s started", data->node->flight_code, track);
             write_to_log(aux);
             free(aux);
@@ -595,7 +591,7 @@ void get_message_from_pipe(int file_d) {
 
         free(data->node);
         free(data);
-        printf("%s THREAD EXITED SUCCESSFULLY \n%s", MAGENTA,RESET);
+        if(showVerbose == 1 ) printf("%s THREAD EXITED SUCCESSFULLY \n%s", MAGENTA,RESET);
         pthread_detach(pthread_self());
         pthread_exit(NULL);
 
@@ -603,12 +599,12 @@ void get_message_from_pipe(int file_d) {
 void *exit_thread(void *arg){
     struct message msg;
 
-    printf("LAST FLIGHT\n");
+    if(showVerbose == 1 ) printf("LAST FLIGHT\n");
     pthread_mutex_lock(&exitor_mutex);
     pthread_cond_wait(&exitor_var, &exitor_mutex);
     pthread_mutex_unlock(&exitor_mutex);
     sleep(1);
-    printf("SENT LAST FLIGHT\n");
+    if(showVerbose == 1 ) printf("SENT LAST FLIGHT\n");
     msg.msgtype = MSGTYPE_EXIT;
     msg.mode = -1;
     msg.fuel = -1;

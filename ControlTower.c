@@ -75,7 +75,7 @@ void *get_messages(void *arg) {
         if(msgrcv(mq_id, &msg_rcv, sizeof(struct message)- sizeof(long), -MSGTYPE_EXIT,0) < 0){
             printf("There as an error sending the message");
         }
-        printf("Message Received\n");
+        if(showVerbose == 1 ) printf("Message Received\n");
         //If the message was received
         new_message = 1;
 
@@ -124,7 +124,7 @@ void *get_messages(void *arg) {
             }
         }
         else if(msg_rcv.mode == -1){
-            printf("RECEIVED END MESSAGE\n");
+            if(showVerbose == 1 ) printf("RECEIVED END MESSAGE\n");
             runningCT = 0;
             new_message = 1;
             pthread_cond_broadcast(&awake_holder_var);
@@ -138,7 +138,7 @@ void *get_messages(void *arg) {
         msg_sent.msgtype = msg_rcv.id;
 
         if(msg_sent.position == -1){
-            printf("HERE\n");
+            if(showVerbose == 1 ) printf("HERE\n");
         }
         if(msg_rcv.mode != -1) {
             if (msgsnd(mq_id, &msg_sent, sizeof(struct sharedmem_info) - sizeof(long), 0) < 0) {
@@ -186,9 +186,9 @@ void flight_handler(){
         if (new_message == 1) {
             pthread_mutex_unlock(&flight_verifier);
             sem_post(can_send);
-            printf("PODE ADICIONAR\n");
+            if(showVerbose == 1 ) printf("PODE ADICIONAR\n");
             sem_wait(can_hold);
-            printf("PODE CONTINUAR\n");
+            if(showVerbose == 1 ) printf("PODE CONTINUAR\n");
 
         } else {
             pthread_mutex_unlock(&flight_verifier);
@@ -224,7 +224,7 @@ void flight_handler(){
                     if (current_element->priority == 1) airport->total_emergency_holding_man++;
                     airport->max_flights[current_element->shared_memory_index] = 7;
                     buffer = (char *) malloc(sizeof(char) * SIZE);
-                    sprintf(buffer, "TP%d HOLDING [%d]",current_element->flight_code,random_number);
+                    sprintf(buffer, "TP%d HOLDING %d FUEL %d",current_element->flight_code,random_number, current_element->fuel);
                     write_to_log(buffer);
                     free(buffer);
                     pthread_cond_broadcast(&airport->command_var);

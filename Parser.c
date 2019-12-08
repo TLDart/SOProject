@@ -120,7 +120,6 @@ p_node parsing(char *string){
                 nodo->fuel = -1;
                 nodo->next = NULL;
             } else {
-                printf("WRONG COMMAND => %s\n", string );
                 write_to_log(msgwrong);
                 return NULL;
             }
