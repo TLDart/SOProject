@@ -40,4 +40,4 @@
     Simples script that automatically inputs commands to the pipe
  
 #### makefile
-    File that generats the executable
+    File that generates the executable
