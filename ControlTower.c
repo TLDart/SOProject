@@ -3,6 +3,7 @@
 
 void control_tower(){
     signal(SIGINT, SIG_IGN);
+    signal(SIGUSR1, showStatistics);
     sem_unlink(CAN_HOLD);
     can_hold = sem_open(CAN_HOLD,O_CREAT| O_EXCL,0700,0);
     sem_unlink(CAN_SEND);
@@ -34,7 +35,34 @@ void control_tower(){
     free(header_departure);
 }
 
+void showStatistics(int signum) {
+    /* Prints the stats to stdout, TU refers to time_units
+     *
+     * Parameters:
+     *      signum = signal number
+     */
+    signal(SIGUSR1, showStatistics);
+    printf("Total number of flights : %d\n", airport->total_flights);
+    printf("Total flights that Landed: %d\n", airport->total_landed);
 
+    if(airport->total_landed != 0)printf("Average Landing ETA: %.2lf TU\n ", (airport->total_time_landing * 1.0) / airport->total_landed);
+    else printf("Average Landing ETA: 0 TU\n ");
+
+    printf("Total Flights that TookOff: %d\n", airport->total_takeoff);
+
+    if(airport->total_takeoff != 0) printf("Average Takeoff Time : %.2lf TU\n ", (airport->total_time_takeoff * 1.0) / airport->total_takeoff);
+    else printf("Average Takeoff Time : 0 TU\n ");
+
+
+    if(airport->total_landed != 0) printf("Average number of holding maneuvers per Regular Flight : %lf\n", (airport->total_holding_man *1.0) / (airport->total_landed));
+    else printf("Average number of holding maneuvers per Regular Flight : 0\n");
+
+    if(airport->total_emergency != 0) printf("Average number of maneuvers per Emergency Flight : %lf\n", (airport->total_emergency_holding_man *1.0) / (airport->total_emergency));
+    else printf("Average number of maneuvers per Emergency Flight : 0\n");
+
+    printf("Total redirected flights : %d\n", airport->redirected_flights);
+    printf("Total rejected flights : %d\n", airport->rejected_flights);
+}
 void *get_messages(void *arg) {
     /*  Thread Function that process messages from the incoming message queue.
      * It both reads the message as well as it searches for an available spot in the array, and finally sends a message to the thread with that info;
@@ -250,6 +278,7 @@ void flight_handler(){
                         airport->max_flights[header_departure->next->next->shared_memory_index] = 3; //Depart on R1
                         //pthread_cond_broadcast(&airport->command_var);
                         header_departure->number_of_nodes--;
+                        airport->total_time_takeoff += now_in_tm(begin, time_unit) - header_departure->next->next->takeoff;
                         airport->total_takeoff++;
                         remove_departure(header_departure, header_departure->next->next);
                     }
@@ -259,6 +288,7 @@ void flight_handler(){
                     pthread_cond_broadcast(&airport->command_var);
                     header_departure->number_of_nodes--;
                     airport->total_takeoff++;
+                    airport->total_time_takeoff += now_in_tm(begin, time_unit) - header_departure->next->takeoff;
                     remove_departure(header_departure,header_departure->next);
                     sleeptime = takeoff_time + takeoff_delta;
                     usleep(sleeptime * 1000 * time_unit);

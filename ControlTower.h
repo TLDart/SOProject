@@ -55,6 +55,7 @@ void control_tower();
 void *get_messages(void *arg);
 int index_shm();
 void flight_handler();
+void showStatistics(int signum);
 int compare_time(struct timespec begin, struct wt takeoff);
 struct list_arrival *create_arrival_list();
 struct list_arrival *create_node_arrival(struct message *information, int position);

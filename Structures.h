@@ -89,7 +89,7 @@ struct wt{
 
 };
 
-<p_node create_list();
+p_node create_list();
 void add_flight(p_node node, p_node list);
 p_node pop_flight(p_node list);
 void print_list(p_node list);
