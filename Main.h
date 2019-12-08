@@ -57,7 +57,7 @@ pthread_cond_t exitor_var = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t exitor_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_t thread_exit;
 
-void write_to_log(char *msg);
+
 void clean_log();
 void parse_arguments(int argc, char **argv);
 void config_test(char *token);
@@ -72,3 +72,4 @@ void *departure(void *arg);
 void *arrival(void *arg);
 void print_msg(struct message * node);
 void* exit_thread(void* arg);
+int get_flight_code(char *flight_code);

@@ -125,6 +125,7 @@ void flight_handler(){
     struct list_arrival *node_arrival;
     struct list_arrival *hold_temp;
     struct list_arrival *current_element;
+    char *buffer;
     int random_number;
     int sleeptime = 0;
     int counter = 0;
@@ -148,19 +149,22 @@ void flight_handler(){
         } else {
             pthread_mutex_unlock(&flight_verifier);
         }
-
+        //printf("NUMBER OF NODES %d\n", header_arrival->number_of_nodes);
         /*Decrementing Fuel*/
         if (header_arrival->number_of_nodes > 0) {
             node_arrival = header_arrival->next;
             while (node_arrival->next != NULL) {
                 if (compare_time(begin, convert_to_wait(node_arrival->eta, time_unit)) == -1) {
                     node_arrival->fuel--;
-                    node_arrival = node_arrival->next;
+                    //printf("DECREMENTED FUEL\n");
+
                 }
+                node_arrival = node_arrival->next;
             }
         }
         /*Chosing holding*/
         if (header_arrival->number_of_nodes > 5) {
+            //printf("HOLDING\n");
             hold_temp = header_arrival->next;
             for (int i = 0; i < 5; i++) {
                 hold_temp = hold_temp->next;
@@ -173,16 +177,21 @@ void flight_handler(){
                     current_element->eta += random_number;
                     airport->total_holding_man++;
                     airport->total_time_landing += random_number;
-                    if (hold_temp->priority == 1) airport->total_emergency_holding_man++;
-                    airport->max_flights[hold_temp->shared_memory_index] = 7;
+                    if (current_element->priority == 1) airport->total_emergency_holding_man++;
+                    airport->max_flights[current_element->shared_memory_index] = 7;
+                    buffer = (char *) malloc(sizeof(char) * SIZE);
+                    sprintf(buffer, "TP%d HOLDING [%d]",current_element->flight_code,random_number);
+                    write_to_log(buffer);
+                    free(buffer);
                     pthread_cond_broadcast(&airport->command_var);
                     pop_arrival(header_arrival, current_element);
                     add_arrival(header_arrival, current_element);
                 } else {
                     current_element = hold_temp;
                     hold_temp = hold_temp->next;
-                    airport->max_flights[hold_temp->shared_memory_index] = 8;
+                    airport->max_flights[current_element->shared_memory_index] = 8;
                     airport->redirected_flights++;
+                    header_arrival->number_of_nodes--;
                     pthread_cond_broadcast(&airport->command_var);
                     remove_arrival(header_arrival, current_element);
                 }
@@ -193,7 +202,8 @@ void flight_handler(){
             if (header_arrival->number_of_nodes > 0) {
                 if(header_arrival->number_of_nodes > 1){
                     if (compare_time(begin, convert_to_wait(header_arrival->next->next->eta, time_unit)) == 1) {// If it is time to shedule the flight
-                        airport->max_flights[header_arrival->next->next->shared_memory_index] = 5;
+                        //printf("CHOOSES 2\n");
+                        airport->max_flights[header_arrival->next->next->shared_memory_index] = 6;
                         //pthread_cond_broadcast(&airport->command_var);
                         header_arrival->number_of_nodes--;
                         if(header_arrival->next->next->priority == 1) airport->total_emergency++;
@@ -203,6 +213,7 @@ void flight_handler(){
                 }
 
                 if (compare_time(begin, convert_to_wait(header_arrival->next->eta, time_unit)) == 1) {// If it is time to shedule the flight
+                    //printf("CHOOSES 1\n");
                     airport->max_flights[header_arrival->next->shared_memory_index] = 5;
                     pthread_cond_broadcast(&airport->command_var);
                     header_arrival->number_of_nodes--;
@@ -213,6 +224,7 @@ void flight_handler(){
                     usleep(sleeptime * 1000 * time_unit);
                 }
             }
+            //printf("TRIED\n");
         }
         else{
             if(header_departure->number_of_nodes > 0){
@@ -239,15 +251,18 @@ void flight_handler(){
             }
         }
         if (header_arrival->number_of_nodes > 0) {
+            //printf("NODES\n");
             node_arrival = header_arrival->next;
             while (node_arrival->next != NULL) {
                 if (compare_time(begin, convert_to_wait(node_arrival->eta, time_unit)) == -1) {
+                    //printf("SLEEPTIME %d\n", sleeptime);
                     node_arrival->fuel -= sleeptime;
-                    node_arrival = node_arrival->next;
                 }
+                node_arrival = node_arrival->next;
             }
         }
         counter++;
+        //printf("ENDS LOOP\n");
         usleep(time_unit *1000); // Sleeping a time unit
     }
 }
@@ -288,7 +303,9 @@ struct list_arrival *create_arrival_list(){
         header->fuel = -1;
         header->shared_memory_index = -1;
         header->number_of_nodes = 0;
+        header->flight_code = 0;
         header->next = NULL;
+
     }
     return header;
 }
@@ -318,6 +335,7 @@ struct list_arrival *create_node_arrival(struct message *information, int positi
     node -> fuel = information -> fuel;
     node -> shared_memory_index = position;
     node -> number_of_nodes = -1;
+    node->flight_code = information->flight_code;
     node -> next = NULL;
 
     return node;

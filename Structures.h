@@ -59,6 +59,7 @@ struct message{
     long msgtype;
     int mode; //1 - ARRIVAL, 0 - DEPARTURE
     int fuel;
+    int flight_code; // the stuct hold a maximium on TP+7 digits
     int time_to_track;//IF MODE 1 THEN ETA, IF MODE 0 THEN TAKEOFF
     int id;//ID that the control tower will use to message
 };

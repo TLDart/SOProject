@@ -13,7 +13,7 @@ void simulation_manager(char *config_path) {
      */
     clock_gettime(CLOCK_REALTIME,&begin);
 
-    pthread_t flight_creator, thread_exit;
+    pthread_t flight_creator;
 
     signal(SIGUSR1, SIG_IGN);   /*Handle Signals*/
     signal(SIGINT, exit_handler);
@@ -238,7 +238,6 @@ void clean_log() {
     logfile = fopen("log.txt", "w");
     fclose(logfile);
 }
-
 void write_to_log(char *msg) {
     /*Writes message to both log and stdout
      * Parameter:
@@ -251,9 +250,11 @@ void write_to_log(char *msg) {
     /*Display time correctly*/
     time(&ctime);
     parsed_time = localtime(&ctime);
-
+    fflush(logfile);
     fprintf(logfile, "%2d:%2d:%2d %s\n", parsed_time->tm_hour, parsed_time->tm_min, parsed_time->tm_sec, msg);
+    fflush(logfile);
     printf("%2d:%2d:%2d %s\n", parsed_time->tm_hour, parsed_time->tm_min, parsed_time->tm_sec, msg);
+
 }
 
 void get_message_from_pipe(int file_d) {
@@ -348,7 +349,6 @@ void get_message_from_pipe(int file_d) {
                     pthread_create(&thread, NULL, arrival, args);
                     list_element++;
                 } else {
-                    puts("[THREAD CREATION ERROR]");
                     write_to_log("[THREAD CREATION ERROR]");
                 }
                 ids++; //Increment Thread Unique ID
@@ -380,7 +380,6 @@ void get_message_from_pipe(int file_d) {
         /*Arrival Activity*/
         sprintf(aux, "[DEPARTURE THREAD CREATED] [FLIGHT CODE] : %s [TAKEOFF]: %d", data->node->flight_code,
                 data->node->takeoff);
-        printf("%s\n", aux);
         write_to_log(aux);
         free(aux);
 
@@ -390,7 +389,7 @@ void get_message_from_pipe(int file_d) {
         msg.fuel = -1;//Departing planes has no fuel
         msg.time_to_track = data->node->takeoff;
         msg.id = data->id;
-
+        msg.flight_code = get_flight_code(data->node->flight_code);
         printf("%s[THREAD][MSG SENT][ID] %d %s\n", CYAN,msg.id, RESET);
 
         if (msgsnd(mq_id, &msg, sizeof(msg) - sizeof(long), 0) == -1) {/*Sends the message to the control tower*/
@@ -439,18 +438,19 @@ void get_message_from_pipe(int file_d) {
         }
 
         aux = (char *) malloc(sizeof(char) * SIZE);
-        sprintf(aux, "%s DEPARTURE %s started", data->node->flight_code, track); // TODO: Complete with departure track
+        sprintf(aux, "%s DEPARTURE %s started", data->node->flight_code, track);
         write_to_log(aux);
         free(aux);
 
         usleep((takeoff_time* time_unit) * 1000); //external global var
 
         aux = (char *) malloc(sizeof(char) * SIZE);
-        sprintf(aux, "%s DEPARTURE %s concluded", data->node->flight_code, track);// TODO:Complete with departure track
+        sprintf(aux, "%s DEPARTURE %s concluded", data->node->flight_code, track);
         write_to_log(aux);
         free(aux);
 
         //Final Thread Activity
+        airport->max_flights[temp.position] = 0;
         aux = (char *) malloc(sizeof(char) * SIZE);
         sprintf(aux, "[THREAD DELETED] [FLIGHT CODE] %s", data->node->flight_code);
         write_to_log(aux);
@@ -486,6 +486,11 @@ void get_message_from_pipe(int file_d) {
         if (data->node->fuel <= emergency_condition) {
             msg.msgtype = MSGTYPE_PRIORITY;
             airport->total_emergency++;
+            aux = malloc(sizeof(char) * BUFFER_SIZE);;//Writing to log temporary variable
+            sprintf(aux, "[%s] REQUESTED EMERGENCY LANDING", data->node->flight_code);
+            write_to_log(aux);
+            free(aux);
+
         } else {
             msg.msgtype = MSGTYPE_DEFAULT;
         }
@@ -493,6 +498,7 @@ void get_message_from_pipe(int file_d) {
         msg.fuel = data->node->fuel;
         msg.time_to_track = data->node->eta;
         msg.id = data->id;
+        msg.flight_code = get_flight_code(data->node->flight_code);
 
 
         printf("%s[THREAD][MSG SENT] [ID] %d%s\n",CYAN, msg.id, RESET);
@@ -521,20 +527,18 @@ void get_message_from_pipe(int file_d) {
 
         pthread_mutex_lock(&airport->mutex_command);
         while (airport->max_flights[temp.position] == 1){//verifica se recebeu o comando para aterrar ou para ir para outro aeroporto, se receber sai
-            printf("%s[THREAD][WAITING FOR COMMAND] [MYID] %ld [POS] %d\n%s",YELLOW,temp.msgtype,temp.position, RESET);
+
             pthread_cond_wait(&airport->command_var, &airport->mutex_command);
             command = airport->max_flights[temp.position];
-            printf("READ NEW COMMAND SUCESSFULLY %d", command);
+            printf("%s[THREAD][WAITING FOR COMMAND] [MYID] %s [POS] %d [COMMAND] %d\n%s",YELLOW,data->node->flight_code,temp.position,command, RESET);
+            //printf("READ NEW COMMAND SUCESSFULLY %d\n", command);
             if (airport->max_flights[temp.position] == 7) {//se receber um holding escreve essa informacao no log
-                aux = (char *) malloc(sizeof(char) * SIZE);
-                sprintf(aux, "%s HOLDING", data->node->flight_code);//TODO:RECHECK THIS
+                //sprintf(aux, "%s HOLDING", data->node->flight_code);//TODO:RECHECK THIS
                 //write_to_log function "{fligth_code} HOLDING {tempo de holding}"
                 //A hora nao sei bem como fazer, usamos o tempo do pc? Ou temos um inicializador separado? O nosso timer nao serve para aquilo
                 //o fligth_code vai buscar-se usando info -> nodo -> fligth_code
                 //tempo de holding vai ser o airport -> avg_man_holding
                 airport->max_flights[temp.position] = 1; //Set slot back to listening state
-                write_to_log(aux);
-                free(aux);
             }
         }
         pthread_mutex_unlock(&airport->mutex_command);
@@ -549,9 +553,9 @@ void get_message_from_pipe(int file_d) {
             sprintf(aux, "%s LANDING %s started", data->node->flight_code, track);
             write_to_log(aux);
             free(aux);
-            usleep((landing_time * time_unit) * 1000);            aux = (char *) malloc(sizeof(char) * SIZE);
+            usleep((landing_time * time_unit) * 1000);
+            aux = (char *) malloc(sizeof(char) * SIZE);
             sprintf(aux, "%s LANDING %s concluded", data->node->flight_code, track);
-            printf("%s\n", aux);
             write_to_log(aux);
             free(aux);
         } else if (command == 8) {//Order to fly away to another airport
@@ -563,6 +567,7 @@ void get_message_from_pipe(int file_d) {
 
 
         //Deleting Thread and freeing memory
+        airport->max_flights[temp.position] = 0;
         aux = malloc(sizeof(char) * BUFFER_SIZE);
         sprintf(aux, "[THREAD DELETED] [FLIGHT CODE] : %s", data->node->flight_code);
         write_to_log(aux);
@@ -589,6 +594,7 @@ void *exit_thread(void *arg){
     msg.fuel = -1;
     msg.time_to_track = -1;
     msg.id = -1;
+    msg.flight_code = 0;
 
     if (msgsnd(mq_id, &msg, sizeof(msg) - sizeof(long), 0) == -1) {/*Sends message to the control tower*/
         perror("ERROR SENDING MESSAGE");
@@ -597,6 +603,11 @@ void *exit_thread(void *arg){
 
     pthread_exit(NULL);
 }
+
+int get_flight_code(char *flight_code){
+        return atoi(&flight_code[2]);
+    }
+
     void print_msg(struct message *node) {
         if (node != NULL) {
             puts("-------STARTING TO PRINT NODE-----------");

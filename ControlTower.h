@@ -19,7 +19,7 @@ struct list_arrival{
     int fuel;
     int shared_memory_index; //Saves the shared memory corresponding iD
     int number_of_nodes;
-
+    int flight_code;
     struct list_arrival *next;
 };
 
@@ -33,6 +33,7 @@ struct list_departure{
 extern pthread_cond_t command_var;
 extern int mq_id, max_landings, max_takeoffs, takeoff_time, takeoff_delta, max_hold, min_hold, landing_delta;
 extern shared_mem *airport;
+extern FILE* logfile;
 
 int runningCT = 1,
         counter_arr = 0, // Flights
@@ -46,11 +47,8 @@ pthread_mutex_t flight_verifier = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t awake_holder_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t awake_holder_var = PTHREAD_COND_INITIALIZER;
 
-
-
 sem_t *can_send,
       *can_hold;
-
 
 //Functions
 void control_tower();
