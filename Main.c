@@ -107,11 +107,30 @@ void simulation_manager(char *config_path) {
     printf("FLIGHT CREATOR CLOSED\n");
     wait(NULL);
     printf("CONTROL TOWER DOWN\n");
+
+    /*Cleaning*/
+    /*Shared Memory*/
+    pthread_cond_destroy(&airport->command_var);
+    pthread_condattr_destroy(&airport->cattr);
+    pthread_mutex_destroy(&airport->mutex_command);
+    pthread_mutexattr_destroy(&airport->mattr);
     shmdt(airport);
     shmctl(shmid, IPC_RMID, 0);
+
+    /*Mutexes and cond variables*/
+    pthread_cond_destroy(&time_var);
+    pthread_cond_destroy(&exitor_var);
+    pthread_mutex_destroy(&mutex_time);
+    pthread_mutex_destroy(&exitor_mutex);
+
+    /*Headers and linked lists*/
+    free(head);
+    /*Files pipes and message queue*/
+    fclose(logfile);
     unlink(PIPE_NAME);
     msgctl(mq_id,IPC_RMID,0);
     printf("XAU LAURA\n");
+    /*Exiting*/
     exit(0);
 }
 

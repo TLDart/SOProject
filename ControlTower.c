@@ -3,6 +3,7 @@
 
 void control_tower(){
     signal(SIGINT, SIG_IGN);
+    signal(SIGUSR1, )
     sem_unlink(CAN_HOLD);
     can_hold = sem_open(CAN_HOLD,O_CREAT| O_EXCL,0700,0);
     sem_unlink(CAN_SEND);
@@ -16,6 +17,22 @@ void control_tower(){
     flight_handler();
 
     pthread_join(messenger,NULL);
+
+    /*Cleaning resources*/
+    /*Conditional variables and threads*/
+    pthread_mutex_destroy(&flight_verifier);
+    pthread_mutex_destroy(&awake_holder_mutex);
+    pthread_cond_destroy(&awake_holder_var);
+
+    /*Semaphores*/
+    sem_close(can_send);
+    sem_close(can_hold);
+    sem_unlink(CAN_SEND);
+    sem_unlink(CAN_HOLD);
+
+    /*Linked lists*/
+    free(header_arrival);
+    free(header_departure);
 }
 
 
