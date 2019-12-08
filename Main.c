@@ -126,12 +126,12 @@ void simulation_manager(char *config_path) {
     /*Headers and linked lists*/
     free(head);
     /*Files pipes and message queue*/
+    write_to_log("[PROGRAMS ENDS]");
     fclose(logfile);
     unlink(PIPE_NAME);
     msgctl(mq_id,IPC_RMID,0);
-    if(showVerbose == 1 ) printf("XAU LAURA\n");
     /*Exiting*/
-    write_to_log("[PROGRAMS ENDS]");
+
     exit(0);
 }
 
