@@ -102,11 +102,11 @@ void simulation_manager(char *config_path) {
     puts("PIPE CLOSED");
     /*Cleaning The system*/
     pthread_join(thread_exit,NULL);
-    printf("THREAD EXITED\n");
+    //printf("THREAD EXITED\n");
     pthread_join(flight_creator, NULL);
-    printf("FLIGHT CREATOR CLOSED\n");
+    //printf("FLIGHT CREATOR CLOSED\n");
     wait(NULL);
-    printf("CONTROL TOWER DOWN\n");
+    //printf("CONTROL TOWER DOWN\n");
 
     /*Cleaning*/
     /*Shared Memory*/
@@ -129,8 +129,9 @@ void simulation_manager(char *config_path) {
     fclose(logfile);
     unlink(PIPE_NAME);
     msgctl(mq_id,IPC_RMID,0);
-    printf("XAU LAURA\n");
+    //printf("XAU LAURA\n");
     /*Exiting*/
+    write_to_log("[PROGRAMS ENDS]");
     exit(0);
 }
 
@@ -211,7 +212,7 @@ void exit_handler(int signum) {
      * Parameter
      *      signum - Number to the signal
      */
-    write_to_log("[PROGRAM ENDING]");
+    write_to_log("[CTRL-C RECEIVED STARTING END SEQUENCE]");
     /*Creates the last thread*/
 
 
@@ -243,9 +244,9 @@ void parse_arguments(int argc, char **argv) {
             showVerbose = 1;
         }
         if (strcmp(argv[i], "-f") == 0) {
-            if (i + 1 < argc) {
-                free(filename);
-                filename = malloc(sizeof(argv[i + 1]));
+            if (i + 1 <= argc) {
+                filename = malloc(strlen(argv[i + 1]));
+                printf("%s", argv[i + 1]);
                 strcpy(filename, argv[i + 1]);
             }
         }
@@ -297,9 +298,9 @@ void get_message_from_pipe(int file_d) {
                     buffer[nread - 1] = '\0';
                 parsed_data = parsing(buffer); // Handle the buffer
                 if (parsed_data != NULL) {
-                    printf("%sPARSER ADDED %s", CYAN,RESET);
-                        add_flight(parsed_data, head);
-                        airport->total_flights++;
+                    //printf("%sPARSER ADDED %s", CYAN,RESET);
+                    add_flight(parsed_data, head);
+                    airport->total_flights++;
                 }
             }
         }
