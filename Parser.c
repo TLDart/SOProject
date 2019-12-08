@@ -1,3 +1,7 @@
+/*
+ * Duarte Dias 2018293526
+ * Gabriel Fernandes 2018288117
+ */
 #include <math.h>
 #include "Parser.h"
 extern pthread_mutex_t mutex_write, mutex_time;

@@ -1,3 +1,7 @@
+/*
+ * Duarte Dias 2018293526
+ * Gabriel Fernandes 2018288117
+ */
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>

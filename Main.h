@@ -1,3 +1,7 @@
+/*
+ * Duarte Dias 2018293526
+ * Gabriel Fernandes 2018288117
+ */
 #include <sys/shm.h>
 #include <stdio.h>
 #include <stdlib.h>

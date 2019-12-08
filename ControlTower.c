@@ -1,5 +1,9 @@
-#include "ControlTower.h"
+/*
+ * Duarte Dias 2018293526
+ * Gabriel Fernandes 2018288117
+ */
 
+#include "ControlTower.h"
 
 void control_tower(){
     signal(SIGINT, SIG_IGN);

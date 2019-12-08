@@ -1,4 +1,7 @@
-// Compile by using ./filename <configPath>
+/*
+ * Duarte Dias 2018293526
+ * Gabriel Fernandes 2018288117
+ */
 #include "Main.h"
 
 int main(int argc, char **argv) {
