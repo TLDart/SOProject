@@ -1,10 +1,17 @@
 # Operating Systems Project
-    This project is based in the language C and makes uses of thread, semaphores, condition variables, shared memory, processes, etc
-    This is a unix based project and made to run on UNIX system (Testing unit was a Ubuntu 18.04).
+    This project is based in the language C and it makes uses of:
+    * Threads
+    * Semaphores
+    * Condition variables
+    * Shared memory
+    * Processes
+    
+    The test unit for the project was a Ubuntu
 
 ## Project Goal 
+
     Control and handle flights in San Francisco Airport
-    The San Francisco airport contains 2 2-pair lanes in which planes land and depart.
+    The San Francisco airport contains 2 2-pair lanes in which planes land and depart, in our example
     The Simulation Manager generates all the resources needed for the functionality of the airport
     Upon command flight received (from the pipe), we will make sure that the command is correct and if soo it will be added to the current to create list.
     There, a thread will wait for the correct init time to create the flight (which will be repesented by a Thread);
