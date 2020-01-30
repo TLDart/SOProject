@@ -1,5 +1,5 @@
 # Operating Systems Project
-    This project is based in the language C and it makes uses of:
+    This project is based in the language C and it make uses of:
     * Threads
     * Semaphores
     * Condition variables
