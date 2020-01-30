@@ -5,25 +5,33 @@
     * Condition variables
     * Shared memory
     * Processes
+    * Pipes
     
-    The test unit for the project was a Ubuntu
+   This Project is meant to work on Linux 19.04
 
-## Project Goal 
-
-    Control and handle flights in San Francisco Airport
-    The San Francisco airport contains 2 2-pair lanes in which planes land and depart, in our example
-    The Simulation Manager generates all the resources needed for the functionality of the airport
-    Upon command flight received (from the pipe), we will make sure that the command is correct and if soo it will be added to the current to create list.
-    There, a thread will wait for the correct init time to create the flight (which will be repesented by a Thread);
-    Upon Creation a flight information the control tower of the status and the control tower responds to the flight with the slot in which the flight is going to listen to commands (Using a message queue); 
-    The control Tower will then Schedule and order landing / departure the flight through that slot (using our own scheduler), making no flight are departing and landing at the same time;
-    Upon decision the flight departs/lands/leaves after a delta time, deleting the thread.
-    On SIGUSR1 the program prints runtime stats to stdout.
-    On SIGINT the program closes the pipe, waits for all flights allready instanciated to leave and then clean resources and leaves.  
+## Lore 
+    Based on the San Francisco's Airport in real life, a Simation Manager runs a system where flights are controled by a Control Tower. Each flight can be declined, received, or be holded. There is also support for emergency flights.
+   
+## Flow
+     1. The Simulation Manager starts the program.
+     In the simulation Manager:
+     * Commands are read from an input *Pipe*, and proceed to be parsed, meaning they can be accepted or denied.
+     * Accepted commmands are moved to a linked list where they wait to be scheduled.
+     * A Thread using conditional Timed wait schedules the flights, aka creates threads, to start in the correct time delta.
+     2. After a flight is created:
+     * Sends a message using a *mssage queue* to the control Tower waiting for an available slot.
+     3. Control Tower:
+     * Receives and Responds to incoming messages from the queue
+     * Schedules flights to land, hold (6th and above on the queue), or sends them wait (either in case of no fuel or if the airport is full). Supports Emergency flights.
+  
+### Additional notes
+    * Upon a flight as landed, its respective thread is released.\
+    * On SIGUSR1 the program prints runtime stats to stdout.
+    * On SIGINT the program closes the pipe, waits for all flights allready instanciated to leave and then clean resources and leaves. 
     
 ## General usage
-    To compile and run there is an included makefile
-    There is also an included tester bash script that input multiple commands into the machine (written using the sh shell);
+    To compile and run there it is included a makefile
+    There is also an included tester bash script that will input multiple commands into the program (written using the sh shell);
     
 ## Files and more
     Alongside this ReadME this project includes:
@@ -48,3 +56,6 @@
  
 #### makefile
     File that generates the executable
+    
+## Known Bugs/Error
+    * Signals (like SIGBUS/ SIGALARM where not treated not to disrupt the program and, if used, will kill the program
