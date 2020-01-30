@@ -58,4 +58,4 @@
     File that generates the executable
     
 ## Known Bugs/Error
-    * Signals (like SIGBUS/ SIGALARM where not treated not to disrupt the program and, if used, will kill the program
+    * Signals (like SIGBUS/ SIGALARM were not treated not to disrupt the program and, if used, will kill the program
