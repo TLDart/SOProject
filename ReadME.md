@@ -58,4 +58,5 @@ Alongside this ReadME this project includes:
 * makefile
     * File that generates the executable
     
-
+## Collaborators
+[Gabriel Fernandes](https://github.com/gabrielmendesfernandes)
